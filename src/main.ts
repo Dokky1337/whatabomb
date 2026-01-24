@@ -243,7 +243,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   const margin = TILE_SIZE * 0.4
   // Extra vertical margin for mobile controls
   // We add HUGE space at the bottom to push the map UP, away from UI
-  const bottomMarginMobile = TILE_SIZE * 8
+  const bottomMarginMobile = TILE_SIZE * 2.5
 
   camera.orthoLeft = -halfWorldWidth - margin
   camera.orthoRight = halfWorldWidth + margin

@@ -1,4 +1,5 @@
-import { getAllMaps, MAP_CONFIGS } from './maps'
+import { MAP_CONFIGS } from './maps'
+import { isMobile } from './device'
 
 export function createMapSelectionScreen(
   onSelect: (mapKey: string) => void,
@@ -44,10 +45,13 @@ export function createMapSelectionScreen(
   mapsContainer.style.borderRadius = '15px'
   mapsContainer.style.border = '1px solid rgba(255, 255, 255, 0.05)'
 
-  const maps = getAllMaps()
-  const mapKeys = Object.keys(MAP_CONFIGS)
+  const allKeys = Object.keys(MAP_CONFIGS)
+  const mapKeys = isMobile()
+    ? allKeys.filter(key => MAP_CONFIGS[key].size !== 'large')
+    : allKeys
 
-  maps.forEach((map, index) => {
+  mapKeys.forEach((key) => {
+    const map = MAP_CONFIGS[key]
     const mapCard = document.createElement('div')
     mapCard.style.padding = '15px'
     mapCard.style.background = 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)'
@@ -118,7 +122,7 @@ export function createMapSelectionScreen(
     mapCard.appendChild(size)
 
     mapCard.addEventListener('click', () => {
-      onSelect(mapKeys[index])
+      onSelect(key)
     })
 
     mapsContainer.appendChild(mapCard)
