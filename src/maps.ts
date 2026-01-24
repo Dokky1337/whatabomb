@@ -22,8 +22,8 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   'small-classic': {
     size: 'small',
     theme: 'classic',
-    gridWidth: 11,
-    gridHeight: 11,
+    gridWidth: 9,
+    gridHeight: 9,
     name: 'Small Arena',
     description: 'Fast-paced battles in a compact space',
     colors: {
@@ -36,8 +36,8 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   'small-moon': {
     size: 'small',
     theme: 'moon',
-    gridWidth: 11,
-    gridHeight: 11,
+    gridWidth: 9,
+    gridHeight: 9,
     name: 'Moon Base',
     description: 'Low gravity battles on the moon!',
     colors: {
@@ -106,8 +106,8 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   'small-ice': {
     size: 'small',
     theme: 'ice',
-    gridWidth: 11,
-    gridHeight: 11,
+    gridWidth: 9,
+    gridHeight: 9,
     name: 'Small Ice Arena',
     description: 'Quick frozen battles',
     colors: {
@@ -120,8 +120,8 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   'small-lava': {
     size: 'small',
     theme: 'lava',
-    gridWidth: 11,
-    gridHeight: 11,
+    gridWidth: 9,
+    gridHeight: 9,
     name: 'Small Lava Arena',
     description: 'Intense volcanic action',
     colors: {
@@ -134,8 +134,8 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   'small-forest': {
     size: 'small',
     theme: 'forest',
-    gridWidth: 11,
-    gridHeight: 11,
+    gridWidth: 9,
+    gridHeight: 9,
     name: 'Small Forest Arena',
     description: 'Quick woodland skirmishes',
     colors: {

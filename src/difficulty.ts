@@ -13,24 +13,24 @@ export const DIFFICULTY_CONFIGS: Record<'easy' | 'medium' | 'hard', DifficultyCo
     aiBombChance: 0.10, // Less aggressive
     aiMinEscapeRoutes: 2,
     powerUpDropRate: 0.5, // More power-ups
-    enemyStartingLives: 2, // Fewer lives
-    playerStartingLives: 4, // More lives
+    enemyStartingLives: 4,
+    playerStartingLives: 4,
   },
   medium: {
     aiMoveSpeed: 800, // Normal
     aiBombChance: 0.15,
     aiMinEscapeRoutes: 2,
     powerUpDropRate: 0.4, // Normal
-    enemyStartingLives: 3,
-    playerStartingLives: 3,
+    enemyStartingLives: 4,
+    playerStartingLives: 4,
   },
   hard: {
     aiMoveSpeed: 600, // Faster
     aiBombChance: 0.25, // More aggressive
     aiMinEscapeRoutes: 1, // Takes more risks
     powerUpDropRate: 0.3, // Fewer power-ups
-    enemyStartingLives: 4, // More lives
-    playerStartingLives: 3,
+    enemyStartingLives: 4,
+    playerStartingLives: 4,
   },
 }
 

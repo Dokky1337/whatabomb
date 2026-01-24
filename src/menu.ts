@@ -168,6 +168,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
     { id: 'stats-button', text: '📊 Stats' },
     { id: 'achievements-button', text: '🏆 Achievements' },
     { id: 'tutorial-button', text: '📖 How to Play' },
+    { id: 'map-selection-button', text: '🗺️ Maps' },
   ]
 
   buttons.forEach(btn => {

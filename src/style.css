@@ -30,6 +30,14 @@ body {
   display: block;
 }
 
+/* Mobile canvas sizing - ensure larger render area */
+@media (max-width: 800px) {
+  #game-canvas {
+    min-height: 70vh !important;
+    height: 100vh !important;
+  }
+}
+
 /* Menu Styling */
 .menu-container {
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
