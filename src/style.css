@@ -108,19 +108,14 @@ body {
 /* Menu Title */
 .menu-title {
   font-family: 'Press Start 2P', cursive !important;
-  color: #ff6600 !important;
+  color: #ffae00 !important;
   text-shadow: 
-    0 0 10px #ff6600,
-    0 0 20px #ff6600,
-    0 0 30px #ff3300,
-    4px 4px 0px #000 !important;
-  animation: titlePulse 2s ease-in-out infinite;
-  letter-spacing: 3px;
-}
-
-@keyframes titlePulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+    3px 3px 0px #000,
+    -1px -1px 0 #000,  
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000 !important;
+  letter-spacing: 2px;
 }
 
 /* Menu Buttons */
