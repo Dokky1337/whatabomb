@@ -1,5 +1,4 @@
 import { MAP_CONFIGS } from './maps'
-import { isMobile } from './device'
 
 export function createMapSelectionScreen(
   onSelect: (mapKey: string) => void,
