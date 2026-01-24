@@ -707,7 +707,6 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     
     // Animation state
     let isMoving = false
-    // let currentAnim = 'idle' // Unused
     let animTime = 0
     
     // Register visual update
@@ -715,26 +714,29 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     const observer = scene.onBeforeRenderObservable.add(() => {
         if (isMoving) {
             animTime += 0.2
-            // Walking animation - swing limbs
-            leftHand.position.z = Math.sin(animTime) * 0.2 * TILE_SIZE
-            rightHand.position.z = Math.sin(animTime + Math.PI) * 0.2 * TILE_SIZE
             
-            leftFoot.position.z = Math.sin(animTime + Math.PI) * 0.15 * TILE_SIZE
-            rightFoot.position.z = Math.sin(animTime) * 0.15 * TILE_SIZE
+            // Walking animation - swing arms forward/back (Y axis for up/down motion)
+            // Arms swing opposite to each other
+            leftHand.position.y = 0.3 * TILE_SIZE + Math.sin(animTime) * 0.08 * TILE_SIZE
+            rightHand.position.y = 0.3 * TILE_SIZE + Math.sin(animTime + Math.PI) * 0.08 * TILE_SIZE
             
-            // Bob body
-            body.position.y = TILE_SIZE * 0.25 + Math.abs(Math.sin(animTime * 2)) * 0.02 * TILE_SIZE
-            head.position.y = TILE_SIZE * 0.6 + Math.abs(Math.sin(animTime * 2)) * 0.02 * TILE_SIZE
+            // Feet alternate forward/back in local Z
+            leftFoot.position.z = Math.sin(animTime + Math.PI) * 0.1 * TILE_SIZE
+            rightFoot.position.z = Math.sin(animTime) * 0.1 * TILE_SIZE
+            
+            // Bob body slightly
+            body.position.y = TILE_SIZE * 0.25 + Math.abs(Math.sin(animTime * 2)) * 0.015 * TILE_SIZE
+            head.position.y = TILE_SIZE * 0.6 + Math.abs(Math.sin(animTime * 2)) * 0.015 * TILE_SIZE
         } else {
             // Idle animation - Breathing
             const breathe = Math.sin(Date.now() * 0.003) * 0.01 * TILE_SIZE
             head.position.y = TILE_SIZE * 0.6 + breathe
             body.scaling.x = 1 + breathe * 0.5
             
-            // Reset limbs
+            // Reset limbs smoothly
             const resetSpeed = 0.2
-            leftHand.position.z = leftHand.position.z * (1 - resetSpeed)
-            rightHand.position.z = rightHand.position.z * (1 - resetSpeed)
+            leftHand.position.y = leftHand.position.y + (0.3 * TILE_SIZE - leftHand.position.y) * resetSpeed
+            rightHand.position.y = rightHand.position.y + (0.3 * TILE_SIZE - rightHand.position.y) * resetSpeed
             leftFoot.position.z = leftFoot.position.z * (1 - resetSpeed)
             rightFoot.position.z = rightFoot.position.z * (1 - resetSpeed)
         }
@@ -753,23 +755,24 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     ;(root as any).playAnimation = (anim: string) => {
         if (anim.startsWith('walk')) {
             isMoving = true
-            // currentAnim = anim // Unused
             
             // Rotate based on direction
+            // Top-down camera view, grid Y maps to world Z
+            // walk-up = move toward top of screen = -Z direction
+            // walk-down = move toward bottom of screen = +Z direction
             const targetRot = 
-                 anim === 'walk-up' ? Math.PI :
-                 anim === 'walk-down' ? 0 :
-                 anim === 'walk-left' ? -Math.PI/2 :
-                 Math.PI/2 // walk-right
+                 anim === 'walk-up' ? -Math.PI/2 :
+                 anim === 'walk-down' ? Math.PI/2 :
+                 anim === 'walk-left' ? Math.PI :
+                 0 // walk-right
                  
-            // Snap to rotation (or lerp if desired)
+            // Snap to rotation
             root.rotation.y = targetRot
             
             // Stop moving after a short delay if no new calls come in
             if ((root as any).stopTimer) clearTimeout((root as any).stopTimer)
             ;(root as any).stopTimer = setTimeout(() => {
                 isMoving = false
-                // currentAnim = 'idle'
             }, 100)
         }
     }
@@ -2147,13 +2150,25 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
             
             // Verify the move is actually valid (double-check)
             if (newX >= 0 && newY >= 0 && newX < GRID_WIDTH && newY < GRID_HEIGHT &&
-                grid[newY][newX] === 'empty' && !bombs.some(b => b.x === newX && b.y === newY)) {
+                grid[newY][newX] === 'empty' && !bombs.some(b => b.x === newX && b.y === newY) &&
+                !(newX === playerGridX && newY === playerGridY) &&
+                !(gameMode === 'pvp' && newX === player2GridX && newY === player2GridY) &&
+                !enemies.some((e, i) => i !== enemyIdx && e.lives > 0 && e.x === newX && e.y === newY)) {
               enemy.x = newX
               enemy.y = newY
               const enemyNewPos = gridToWorld(enemy.x, enemy.y)
               enemy.mesh.position.x = enemyNewPos.x
               enemy.mesh.position.y = TILE_SIZE * 0.5
               enemy.mesh.position.z = enemyNewPos.z
+
+              const dx = escapeDir.dx
+              const dy = escapeDir.dy
+              if ((enemy.mesh as any).playAnimation) {
+                if (dx < 0) (enemy.mesh as any).playAnimation('walk-up')
+                else if (dx > 0) (enemy.mesh as any).playAnimation('walk-down')
+                else if (dy < 0) (enemy.mesh as any).playAnimation('walk-left')
+                else if (dy > 0) (enemy.mesh as any).playAnimation('walk-right')
+              }
             }
           } else {
             // No calculated escape - try any walkable tile
@@ -2161,13 +2176,23 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
               const newX = enemy.x + dx
               const newY = enemy.y + dy
               if (newX >= 0 && newY >= 0 && newX < GRID_WIDTH && newY < GRID_HEIGHT &&
-                  grid[newY][newX] === 'empty' && !bombs.some(b => b.x === newX && b.y === newY)) {
+                  grid[newY][newX] === 'empty' && !bombs.some(b => b.x === newX && b.y === newY) && 
+                  !(newX === playerGridX && newY === playerGridY) &&
+                  !(gameMode === 'pvp' && newX === player2GridX && newY === player2GridY) &&
+                  !enemies.some((e, i) => i !== enemyIdx && e.lives > 0 && e.x === newX && e.y === newY)) {
                 enemy.x = newX
                 enemy.y = newY
                 const enemyNewPos = gridToWorld(enemy.x, enemy.y)
                 enemy.mesh.position.x = enemyNewPos.x
                 enemy.mesh.position.y = TILE_SIZE * 0.5
                 enemy.mesh.position.z = enemyNewPos.z
+                
+                if ((enemy.mesh as any).playAnimation) {
+                  if (dx < 0) (enemy.mesh as any).playAnimation('walk-up')
+                  else if (dx > 0) (enemy.mesh as any).playAnimation('walk-down')
+                  else if (dy < 0) (enemy.mesh as any).playAnimation('walk-left')
+                  else if (dy > 0) (enemy.mesh as any).playAnimation('walk-right')
+                }
                 break
               }
             }
@@ -2191,6 +2216,13 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
             
             // Check if there's a bomb at the target
             if (bombs.some(b => b.x === newX && b.y === newY)) {
+              return { dx, dy, score: -Infinity, isSafe: false }
+            }
+            
+            // Check collision with Players and other Enemies
+            if ((newX === playerGridX && newY === playerGridY) ||
+                (gameMode === 'pvp' && newX === player2GridX && newY === player2GridY) ||
+                enemies.some((e, i) => i !== enemyIdx && e.lives > 0 && e.x === newX && e.y === newY)) {
               return { dx, dy, score: -Infinity, isSafe: false }
             }
             
@@ -2250,6 +2282,15 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
             enemy.mesh.position.x = enemyNewPos.x
             enemy.mesh.position.y = TILE_SIZE * 0.5
             enemy.mesh.position.z = enemyNewPos.z
+
+            const dx = bestMove.dx
+            const dy = bestMove.dy
+            if ((enemy.mesh as any).playAnimation) {
+              if (dx < 0) (enemy.mesh as any).playAnimation('walk-up')
+              else if (dx > 0) (enemy.mesh as any).playAnimation('walk-down')
+              else if (dy < 0) (enemy.mesh as any).playAnimation('walk-left')
+              else if (dy > 0) (enemy.mesh as any).playAnimation('walk-right')
+            }
           }
           // If no safe moves available, stay in place (better than dying!)
         }
@@ -2281,13 +2322,26 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
             
             // Verify escape move is valid
             if (escapeX >= 0 && escapeY >= 0 && escapeX < GRID_WIDTH && escapeY < GRID_HEIGHT &&
-                grid[escapeY][escapeX] === 'empty') {
+                grid[escapeY][escapeX] === 'empty' && 
+                !bombs.some(b => b.x === escapeX && b.y === escapeY) &&
+                !(escapeX === playerGridX && escapeY === playerGridY) &&
+                !(gameMode === 'pvp' && escapeX === player2GridX && escapeY === player2GridY) &&
+                !enemies.some((e, i) => i !== enemyIdx && e.lives > 0 && e.x === escapeX && e.y === escapeY)) {
               enemy.x = escapeX
               enemy.y = escapeY
               const enemyNewPos = gridToWorld(enemy.x, enemy.y)
               enemy.mesh.position.x = enemyNewPos.x
               enemy.mesh.position.y = TILE_SIZE * 0.5
               enemy.mesh.position.z = enemyNewPos.z
+              
+              const dx = decision.escapeDirection.dx
+              const dy = decision.escapeDirection.dy
+              if ((enemy.mesh as any).playAnimation) {
+                if (dx < 0) (enemy.mesh as any).playAnimation('walk-up')
+                else if (dx > 0) (enemy.mesh as any).playAnimation('walk-down')
+                else if (dy < 0) (enemy.mesh as any).playAnimation('walk-left')
+                else if (dy > 0) (enemy.mesh as any).playAnimation('walk-right')
+              }
               console.log(`🏃 AI ${enemyIdx + 1} escaping immediately!`)
             }
           }
@@ -2757,6 +2811,12 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
     if (grid[targetY][targetX] === 'wall' || grid[targetY][targetX] === 'destructible') return false
 
+    // Check collision with enemies (blocking)
+    if (enemies.some(e => e.lives > 0 && e.x === targetX && e.y === targetY)) return false
+    
+    // Check collision with Player 2 (in PvP)
+    if (gameMode === 'pvp' && targetX === player2GridX && targetY === player2GridY) return false
+
     playerGridX = targetX
     playerGridY = targetY
     const newPos = gridToWorld(playerGridX, playerGridY)
@@ -2791,6 +2851,12 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     if (bombs.some(b => b.x === targetX && b.y === targetY) && !player2HasKick) return false
 
     if (grid[targetY][targetX] === 'wall' || grid[targetY][targetX] === 'destructible') return false
+
+    // Check collision with enemies (blocking)
+    if (enemies.some(e => e.lives > 0 && e.x === targetX && e.y === targetY)) return false
+    
+    // Check collision with Player 1
+    if (targetX === playerGridX && targetY === playerGridY) return false
 
     player2GridX = targetX
     player2GridY = targetY
