@@ -353,6 +353,26 @@ body {
   align-items: center;
   z-index: 3000;
   animation: fadeIn 0.5s ease;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Mobile fix for winner overlay centering */
+@media (max-width: 800px) {
+  .winner-overlay {
+    padding: 15px;
+  }
+  
+  .winner-overlay .winner-text {
+    font-size: 24px !important;
+    text-align: center;
+    word-wrap: break-word;
+  }
+  
+  .winner-overlay button {
+    font-size: 14px !important;
+    padding: 12px 24px !important;
+  }
 }
 
 @keyframes fadeIn {
@@ -584,4 +604,70 @@ body {
 .action-btn:active, .action-btn.active {
   background: rgba(255, 60, 60, 0.5);
   transform: scale(0.92);
+}
+
+/* PC text scaling - larger screens get larger text */
+@media (min-width: 1200px) {
+  .game-ui-panel {
+    padding: 20px !important;
+    min-width: 220px !important;
+  }
+  
+  .game-ui-panel h3 {
+    font-size: 14px !important;
+  }
+  
+  .center-ui {
+    font-size: 18px !important;
+    padding: 16px 28px !important;
+  }
+  
+  .winner-text {
+    font-size: 64px !important;
+  }
+  
+  .countdown-number {
+    font-size: 200px !important;
+  }
+  
+  .countdown-go {
+    font-size: 140px !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  .game-ui-panel {
+    padding: 25px !important;
+    min-width: 260px !important;
+  }
+  
+  .game-ui-panel h3 {
+    font-size: 16px !important;
+  }
+  
+  .center-ui {
+    font-size: 22px !important;
+    padding: 20px 35px !important;
+  }
+  
+  .winner-text {
+    font-size: 72px !important;
+  }
+  
+  .countdown-number {
+    font-size: 240px !important;
+  }
+  
+  .countdown-go {
+    font-size: 160px !important;
+  }
+  
+  .menu-title {
+    font-size: 56px !important;
+  }
+  
+  .menu-button {
+    font-size: 24px !important;
+    padding: 20px 60px !important;
+  }
 }

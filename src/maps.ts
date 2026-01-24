@@ -22,10 +22,10 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   'small-classic': {
     size: 'small',
     theme: 'classic',
-    gridWidth: 9,
-    gridHeight: 9,
+    gridWidth: 11,
+    gridHeight: 11,
     name: 'Small Arena',
-    description: 'Fast-paced battles in a compact space',
+    description: 'Fast-paced battles, good for mobile devices',
     colors: {
       ground: new Color3(0.15, 0.35, 0.15),
       wall: new Color3(0.5, 0.5, 0.5),
@@ -36,8 +36,8 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
   'small-moon': {
     size: 'small',
     theme: 'moon',
-    gridWidth: 9,
-    gridHeight: 9,
+    gridWidth: 11,
+    gridHeight: 11,
     name: 'Moon Base',
     description: 'Low gravity battles on the moon!',
     colors: {
@@ -45,6 +45,48 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
       wall: new Color3(0.4, 0.4, 0.45),
       destructible: new Color3(0.6, 0.6, 0.65),
       ambient: new Color3(0.1, 0.1, 0.15),
+    },
+  },
+  'small-ice': {
+    size: 'small',
+    theme: 'ice',
+    gridWidth: 11,
+    gridHeight: 11,
+    name: 'Small Ice Arena',
+    description: 'Quick frozen battles',
+    colors: {
+      ground: new Color3(0.7, 0.85, 0.95),
+      wall: new Color3(0.5, 0.7, 0.9),
+      destructible: new Color3(0.8, 0.9, 1.0),
+      ambient: new Color3(0.6, 0.7, 0.8),
+    },
+  },
+  'small-lava': {
+    size: 'small',
+    theme: 'lava',
+    gridWidth: 11,
+    gridHeight: 11,
+    name: 'Small Lava Arena',
+    description: 'Intense volcanic action',
+    colors: {
+      ground: new Color3(0.3, 0.1, 0.05),
+      wall: new Color3(0.2, 0.2, 0.2),
+      destructible: new Color3(0.6, 0.3, 0.1),
+      ambient: new Color3(0.3, 0.1, 0.0),
+    },
+  },
+  'small-forest': {
+    size: 'small',
+    theme: 'forest',
+    gridWidth: 11,
+    gridHeight: 11,
+    name: 'Small Forest Arena',
+    description: 'Quick woodland skirmishes',
+    colors: {
+      ground: new Color3(0.2, 0.4, 0.15),
+      wall: new Color3(0.3, 0.25, 0.2),
+      destructible: new Color3(0.5, 0.35, 0.2),
+      ambient: new Color3(0.15, 0.25, 0.1),
     },
   },
   'medium-classic': {
@@ -103,13 +145,41 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
       ambient: new Color3(0.15, 0.25, 0.1),
     },
   },
-  'small-ice': {
-    size: 'small',
+  'medium-space': {
+    size: 'medium',
+    theme: 'space',
+    gridWidth: 17,
+    gridHeight: 17,
+    name: 'Space Station',
+    description: 'Low gravity battles in the deep void',
+    colors: {
+      ground: new Color3(0.1, 0.05, 0.2),
+      wall: new Color3(0.1, 0.8, 0.9),
+      destructible: new Color3(0.4, 0.4, 0.5),
+      ambient: new Color3(0.1, 0.1, 0.3),
+    },
+  },
+  'large-classic': {
+    size: 'large',
+    theme: 'classic',
+    gridWidth: 21,
+    gridHeight: 21,
+    name: 'Large Classic Arena',
+    description: 'Epic battles on a massive battlefield',
+    colors: {
+      ground: new Color3(0.15, 0.35, 0.15),
+      wall: new Color3(0.5, 0.5, 0.5),
+      destructible: new Color3(0.7, 0.6, 0.4),
+      ambient: new Color3(0.1, 0.2, 0.1),
+    },
+  },
+  'large-ice': {
+    size: 'large',
     theme: 'ice',
-    gridWidth: 9,
-    gridHeight: 9,
-    name: 'Small Ice Arena',
-    description: 'Quick frozen battles',
+    gridWidth: 21,
+    gridHeight: 21,
+    name: 'Large Ice Arena',
+    description: 'Expansive frozen battlefield',
     colors: {
       ground: new Color3(0.7, 0.85, 0.95),
       wall: new Color3(0.5, 0.7, 0.9),
@@ -117,13 +187,13 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
       ambient: new Color3(0.6, 0.7, 0.8),
     },
   },
-  'small-lava': {
-    size: 'small',
+  'large-lava': {
+    size: 'large',
     theme: 'lava',
-    gridWidth: 9,
-    gridHeight: 9,
-    name: 'Small Lava Arena',
-    description: 'Intense volcanic action',
+    gridWidth: 21,
+    gridHeight: 21,
+    name: 'Large Lava Arena',
+    description: 'Massive volcanic warzone',
     colors: {
       ground: new Color3(0.3, 0.1, 0.05),
       wall: new Color3(0.2, 0.2, 0.2),
@@ -131,13 +201,13 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
       ambient: new Color3(0.3, 0.1, 0.0),
     },
   },
-  'small-forest': {
-    size: 'small',
+  'large-forest': {
+    size: 'large',
     theme: 'forest',
-    gridWidth: 9,
-    gridHeight: 9,
-    name: 'Small Forest Arena',
-    description: 'Quick woodland skirmishes',
+    gridWidth: 21,
+    gridHeight: 21,
+    name: 'Large Forest Arena',
+    description: 'Sprawling woodland battleground',
     colors: {
       ground: new Color3(0.2, 0.4, 0.15),
       wall: new Color3(0.3, 0.25, 0.2),
@@ -145,18 +215,32 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
       ambient: new Color3(0.15, 0.25, 0.1),
     },
   },
-  'medium-space': {
+  'large-space': {
+    size: 'large',
+    theme: 'space',
+    gridWidth: 21,
+    gridHeight: 21,
+    name: 'Large Space Station',
+    description: 'Enormous zero-gravity arena',
+    colors: {
+      ground: new Color3(0.1, 0.05, 0.2),
+      wall: new Color3(0.1, 0.8, 0.9),
+      destructible: new Color3(0.4, 0.4, 0.5),
+      ambient: new Color3(0.1, 0.1, 0.3),
+    },
+  },
+  'chaos-neon': {
     size: 'medium',
     theme: 'space',
-    gridWidth: 17,
-    gridHeight: 17,
-    name: 'Moon Base',
-    description: 'Low gravity battles in the deep void',
+    gridWidth: 19,
+    gridHeight: 15,
+    name: '⚡ Neon Chaos ⚡',
+    description: 'Wide cyberpunk arena with neon vibes!',
     colors: {
-      ground: new Color3(0.1, 0.05, 0.2), // Deep purple/black
-      wall: new Color3(0.1, 0.8, 0.9), // Cyan neon
-      destructible: new Color3(0.4, 0.4, 0.5), // Grey metal
-      ambient: new Color3(0.1, 0.1, 0.3), // Blueish ambient
+      ground: new Color3(0.05, 0.0, 0.1),
+      wall: new Color3(1.0, 0.0, 0.5),
+      destructible: new Color3(0.0, 1.0, 0.8),
+      ambient: new Color3(0.2, 0.0, 0.3),
     },
   },
 }

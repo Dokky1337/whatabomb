@@ -63,8 +63,8 @@ const gameStateManager = new GameStateManager()
 const achievementsManager = new AchievementsManager()
 let soundManager: SoundManager | null = null
 
-// Map configuration
-let currentMapConfig: MapConfig = getMapConfig('medium-classic')
+// Map configuration - default to small map on mobile, medium on PC
+let currentMapConfig: MapConfig = getMapConfig(isMobile() ? 'small-classic' : 'medium-classic')
 
 // Basic grid settings (can be tuned later to match Playing With Fire 2)
 // Total number of tiles horizontally/vertically (including outer walls)
@@ -112,10 +112,15 @@ function createGrid(width: number, height: number): Grid {
     const row: TileType[] = []
     for (let x = 0; x < width; x++) {
       const isBorder = x === 0 || y === 0 || x === width - 1 || y === height - 1
-      const isInnerPillar = x % 2 === 0 && y % 2 === 0
+      // Don't place pillars on the edge rows (y=1 and y=height-2) for clear paths
+      const isEdgeRow = y === 1 || y === height - 2
+      const isInnerPillar = x % 2 === 0 && y % 2 === 0 && !isEdgeRow
 
       if (isBorder || isInnerPillar) {
         row.push('wall')
+      } else if (isEdgeRow) {
+        // Keep edge rows empty for movement
+        row.push('empty')
       } else {
         // Add destructible blocks randomly (about 80% of empty tiles)
         if (Math.random() < 0.8) {
@@ -926,19 +931,37 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     playerUIDiv.style.transform = 'scale(0.8)'
     playerUIDiv.style.transformOrigin = 'bottom left'
   } else {
-    playerUIDiv.style.top = '15px'
-    playerUIDiv.style.left = '15px'
+    // PC: Centered at bottom with transparency
+    playerUIDiv.style.bottom = '15px'
+    playerUIDiv.style.left = '50%'
+    playerUIDiv.style.transform = 'translateX(-50%)'
   }
   playerUIDiv.style.color = 'white'
   playerUIDiv.style.fontFamily = "'Russo One', sans-serif"
-  playerUIDiv.style.fontSize = '16px'
+  playerUIDiv.style.fontSize = isMobileDevice ? '16px' : '14px'
   playerUIDiv.style.zIndex = '1000'
-  playerUIDiv.style.minWidth = '180px'
-  playerUIDiv.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(20,20,40,0.9) 100%)'
+  playerUIDiv.style.minWidth = isMobileDevice ? '180px' : '160px'
+  playerUIDiv.style.background = isMobileDevice 
+    ? 'linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(20,20,40,0.9) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(20,20,40,0.55) 100%)'
   playerUIDiv.style.border = '2px solid rgba(255,68,68,0.3)'
   playerUIDiv.style.borderRadius = '12px'
-  playerUIDiv.style.padding = '12px'
+  playerUIDiv.style.padding = isMobileDevice ? '12px' : '8px 10px'
   playerUIDiv.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)'
+  playerUIDiv.style.opacity = isMobileDevice ? '1' : '0.85'
+  playerUIDiv.style.transition = 'opacity 0.2s ease'
+  
+  // PC: Make more visible on hover
+  if (!isMobileDevice) {
+    playerUIDiv.addEventListener('mouseenter', () => {
+      playerUIDiv.style.opacity = '1'
+      playerUIDiv.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(20,20,40,0.9) 100%)'
+    })
+    playerUIDiv.addEventListener('mouseleave', () => {
+      playerUIDiv.style.opacity = '0.85'
+      playerUIDiv.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(20,20,40,0.55) 100%)'
+    })
+  }
   document.body.appendChild(playerUIDiv)
   
   // UI for timer/rounds (top-center)
@@ -949,24 +972,27 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     centerUIDiv.style.bottom = '15px'
     centerUIDiv.style.top = 'auto'
   } else {
-    centerUIDiv.style.top = '15px'
+    // PC: Keep at top center - doesn't block corners
+    centerUIDiv.style.top = '10px'
   }
   centerUIDiv.style.left = '50%'
   centerUIDiv.style.transform = 'translateX(-50%)'
   centerUIDiv.style.color = 'white'
   centerUIDiv.style.fontFamily = "'Press Start 2P', 'Russo One', sans-serif"
-  centerUIDiv.style.fontSize = '14px'
+  centerUIDiv.style.fontSize = isMobileDevice ? '14px' : '12px'
   centerUIDiv.style.fontWeight = 'bold'
   centerUIDiv.style.zIndex = '1000'
   centerUIDiv.style.textAlign = 'center'
-  centerUIDiv.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(30,30,60,0.9) 100%)'
+  centerUIDiv.style.background = isMobileDevice
+    ? 'linear-gradient(135deg, rgba(0,0,0,0.9) 0%, rgba(30,30,60,0.9) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(30,30,60,0.55) 100%)'
   centerUIDiv.style.border = '3px solid rgba(255, 102, 0, 0.5)'
   centerUIDiv.style.borderRadius = '12px'
-  centerUIDiv.style.padding = '12px 20px'
+  centerUIDiv.style.padding = isMobileDevice ? '12px 20px' : '8px 16px'
   centerUIDiv.style.boxShadow = '0 0 20px rgba(255, 102, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
   document.body.appendChild(centerUIDiv)
 
-  // UI for opponents (bottom-right)
+  // UI for opponents (top-right on PC, hidden on mobile)
   const opponentUIDiv = document.createElement('div')
   if (isMobileDevice) {
     opponentUIDiv.style.display = 'none' // Hide enemies stats on mobile to save space
@@ -984,13 +1010,37 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       opponentUIDiv.style.transformOrigin = 'bottom right'
       opponentUIDiv.style.display = 'block'
   } else {
-      opponentUIDiv.style.top = '15px'
-      opponentUIDiv.style.right = '15px'
-  }
-  if (!isMobileDevice) { // Only set bottom/right defaults for desktop if needed, currently overwritten above
-     opponentUIDiv.style.bottom = 'auto' 
+      // PC: Top right but semi-transparent
+      opponentUIDiv.style.top = '10px'
+      opponentUIDiv.style.right = '10px'
   }
   opponentUIDiv.style.color = 'white'
+  opponentUIDiv.style.fontFamily = "'Russo One', sans-serif"
+  opponentUIDiv.style.fontSize = isMobileDevice ? '16px' : '14px'
+  opponentUIDiv.style.zIndex = '1000'
+  opponentUIDiv.style.minWidth = isMobileDevice ? '180px' : '160px'
+  opponentUIDiv.style.background = isMobileDevice
+    ? 'linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(20,20,40,0.9) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(20,20,40,0.55) 100%)'
+  opponentUIDiv.style.border = '2px solid rgba(204,68,255,0.3)'
+  opponentUIDiv.style.borderRadius = '12px'
+  opponentUIDiv.style.padding = isMobileDevice ? '12px' : '8px 10px'
+  opponentUIDiv.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)'
+  opponentUIDiv.style.opacity = isMobileDevice ? '1' : '0.85'
+  opponentUIDiv.style.transition = 'opacity 0.2s ease'
+  
+  // PC: Make more visible on hover
+  if (!isMobileDevice) {
+    opponentUIDiv.addEventListener('mouseenter', () => {
+      opponentUIDiv.style.opacity = '1'
+      opponentUIDiv.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(20,20,40,0.9) 100%)'
+    })
+    opponentUIDiv.addEventListener('mouseleave', () => {
+      opponentUIDiv.style.opacity = '0.85'
+      opponentUIDiv.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(20,20,40,0.55) 100%)'
+    })
+  }
+  document.body.appendChild(opponentUIDiv)
   opponentUIDiv.style.fontFamily = "'Russo One', sans-serif"
   opponentUIDiv.style.fontSize = '16px'
   opponentUIDiv.style.zIndex = '1000'
@@ -2402,32 +2452,35 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     const bombAtPlayer = bombs.find(b => b.x === playerGridX && b.y === playerGridY)
     if (!bombAtPlayer) return false
 
-    // Throw distance is 3 tiles
+    // Throw distance is 3 tiles - bomb flies over obstacles and lands on the other side
     const throwDistance = 3
     let finalX = playerGridX
     let finalY = playerGridY
 
-    for (let i = 1; i <= throwDistance; i++) {
+    // Check from farthest to nearest to find valid landing spot (skipping over obstacles)
+    for (let i = throwDistance; i >= 1; i--) {
       const checkX = playerGridX + dx * i
       const checkY = playerGridY + dy * i
 
-      // Stop if out of bounds
+      // Skip if out of bounds
       if (checkX < 0 || checkY < 0 || checkX >= GRID_WIDTH || checkY >= GRID_HEIGHT) {
-        break
+        continue
       }
 
-      // Stop if we hit a wall or destructible block
+      // Skip if it's a wall or destructible block (can't land there)
       if (grid[checkY][checkX] === 'wall' || grid[checkY][checkX] === 'destructible') {
-        break
+        continue
       }
 
-      // Stop if there's another bomb
+      // Skip if there's another bomb
       if (bombs.some(b => b !== bombAtPlayer && b.x === checkX && b.y === checkY)) {
-        break
+        continue
       }
 
+      // Found a valid spot!
       finalX = checkX
       finalY = checkY
+      break
     }
 
     // Move the bomb to the new position
@@ -2486,20 +2539,23 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     const bombAtPlayer = bombs.find(b => b.x === player2GridX && b.y === player2GridY)
     if (!bombAtPlayer) return false
 
+    // Throw distance is 3 tiles - bomb flies over obstacles and lands on the other side
     const throwDistance = 3
     let finalX = player2GridX
     let finalY = player2GridY
 
-    for (let i = 1; i <= throwDistance; i++) {
+    // Check from farthest to nearest to find valid landing spot (skipping over obstacles)
+    for (let i = throwDistance; i >= 1; i--) {
       const checkX = player2GridX + dx * i
       const checkY = player2GridY + dy * i
 
-      if (checkX < 0 || checkY < 0 || checkX >= GRID_WIDTH || checkY >= GRID_HEIGHT) break
-      if (grid[checkY][checkX] === 'wall' || grid[checkY][checkX] === 'destructible') break
-      if (bombs.some(b => b !== bombAtPlayer && b.x === checkX && b.y === checkY)) break
+      if (checkX < 0 || checkY < 0 || checkX >= GRID_WIDTH || checkY >= GRID_HEIGHT) continue
+      if (grid[checkY][checkX] === 'wall' || grid[checkY][checkX] === 'destructible') continue
+      if (bombs.some(b => b !== bombAtPlayer && b.x === checkX && b.y === checkY)) continue
 
       finalX = checkX
       finalY = checkY
+      break
     }
 
     if (finalX !== player2GridX || finalY !== player2GridY) {

@@ -46,9 +46,8 @@ export function createMapSelectionScreen(
   mapsContainer.style.border = '1px solid rgba(255, 255, 255, 0.05)'
 
   const allKeys = Object.keys(MAP_CONFIGS)
-  const mapKeys = isMobile()
-    ? allKeys.filter(key => MAP_CONFIGS[key].size === 'small')
-    : allKeys.filter(key => key !== 'small-moon')
+  // Show all maps on both mobile and PC
+  const mapKeys = allKeys.filter(key => key !== 'small-moon')
 
   mapKeys.forEach((key) => {
     const map = MAP_CONFIGS[key]
