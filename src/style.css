@@ -438,7 +438,8 @@ body {
 
 .dpad {
   position: absolute;
-  bottom: 100px;
+  /* Moved up to clear player text UI */
+  bottom: 150px;
   left: 20px;
   width: 150px;
   height: 150px;
@@ -467,14 +468,44 @@ body {
 .dpad-right { top: 50px; right: 0; }
 
 /* Arrows on dpad buttons */
-.dpad-up::after { content: "▲"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; }
-.dpad-down::after { content: "▼"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; }
-.dpad-left::after { content: "◀"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; }
-.dpad-right::after { content: "▶"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; }
+/* The user requested moving arrows up slightly. padding-bottom pushes grid content up. */
+/* Increased padding to move icon further up (visually) inside the button */
+.dpad-up::after { content: "▲"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; padding-bottom: 12px; }
+.dpad-down::after { content: "▼"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; padding-bottom: 12px; }
+.dpad-left::after { content: "◀"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; padding-bottom: 12px; }
+.dpad-right::after { content: "▶"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; padding-bottom: 12px; }
+
+.offscreen-indicator {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  z-index: 100; /* Below UI panels but above game */
+  pointer-events: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: opacity 0.2s;
+}
+
+.offscreen-arrow {
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-bottom: 20px solid; /* Color set inline */
+  filter: drop-shadow(0 0 4px rgba(0,0,0,0.8));
+  animation: pulse-arrow 1s infinite alternate;
+}
+
+@keyframes pulse-arrow {
+  from { transform: scale(1); }
+  to { transform: scale(1.2); }
+}
 
 .action-btn-container {
   position: absolute;
-  bottom: 110px;
+  /* Moved up to clear enemy/status text UI */
+  bottom: 160px;
   right: 30px;
   pointer-events: auto;
 }

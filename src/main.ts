@@ -11,6 +11,7 @@ import {
   MeshBuilder,
   StandardMaterial,
   Vector3,
+  Matrix,
   Scene,
   ParticleSystem,
   Texture,
@@ -240,15 +241,35 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   
   const halfWorldWidth = (GRID_WIDTH * TILE_SIZE) / 2
   const halfWorldHeight = (GRID_HEIGHT * TILE_SIZE) / 2
+  
+  // Mobile zoom adjustment: Reduce the visible area slightly to make everything bigger
+  // A zoom factor < 1.0 means zooming in (showing less area)
+  // A zoom factor > 1.0 means zooming out (showing more area)
+  // For mobile, we want to zoom in a bit, so we use something like 0.85
+  // But we must ensure the whole map is still visible if possible, or just accept some cutoff
+  // Since the user wants it "zoomed/a bit bigger", we can try reducing the margin or slightly scaling down logic
+  
+  const zoomFactor = isMobile() ? 0.6 : 1.0 
+  
   const margin = TILE_SIZE * 0.4
   // Extra vertical margin for mobile controls
-  // We add HUGE space at the bottom to push the map UP, away from UI
   const bottomMarginMobile = TILE_SIZE * 2.5
 
-  camera.orthoLeft = -halfWorldWidth - margin
-  camera.orthoRight = halfWorldWidth + margin
-  camera.orthoBottom = -halfWorldHeight - (isMobile() ? bottomMarginMobile : margin)
-  camera.orthoTop = halfWorldHeight + margin
+  // Apply zoom by modifying the boundaries
+  // Note: changing halfWorldWidth effectively changes the viewing frustum size
+  
+  // Calculate viewport dimensions in world units
+  const viewportHalfWidth = (halfWorldWidth + margin) * zoomFactor
+  const viewportHalfHeight = (halfWorldHeight + margin) * zoomFactor
+  
+  camera.orthoLeft = -viewportHalfWidth
+  camera.orthoRight = viewportHalfWidth
+  // For mobile, we center the view vertically differently initially due to controls,
+  // but if we follow the player, we might want to center on player.
+  // However, the controls are still at the bottom.
+  // If we follow player, we should probably keep the player centered or slightly offset.
+  camera.orthoBottom = -viewportHalfHeight - (isMobile() ? bottomMarginMobile * zoomFactor : 0)
+  camera.orthoTop = viewportHalfHeight
 
   // Fix the camera so the player can't rotate/zoom
   camera.inputs.clear()
@@ -2736,6 +2757,137 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     window.removeEventListener('keyup', keyupHandler)
   })
 
+  // Off-screen indicators
+  const indicatorContainer = document.createElement('div')
+  indicatorContainer.id = 'indicator-container'
+  document.body.appendChild(indicatorContainer)
+  const activeIndicators = new Map<string, HTMLElement>()
+
+  // Cleanup on scene dispose
+  scene.onDisposeObservable.add(() => {
+    indicatorContainer.remove()
+  })
+
+  function updateOffscreenIndicators() {
+    // Collect all targets (enemies + player 2 if in PVP)
+    const targets: { id: string, x: number, z: number, color: string, active: boolean }[] = []
+    
+    enemies.forEach((enemy, idx) => {
+      if (enemy.lives > 0) {
+        // Find the color used for this enemy or default to red
+        const color = (idx < enemyColors.length) ? enemyColors[idx] : '#ff4444'
+        const pos = gridToWorld(enemy.x, enemy.y)
+        targets.push({ id: `enemy-${idx}`, x: pos.x, z: pos.z, color, active: true })
+      }
+    })
+
+    if (gameMode === 'pvp' && player2Lives > 0) {
+        // Add player 2
+        targets.push({ id: 'p2', x: player2.position.x, z: player2.position.z, color: '#4488ff', active: true })
+    }
+
+    // Process targets
+    targets.forEach(target => {
+        let indicator = activeIndicators.get(target.id)
+        if (!indicator) {
+            indicator = document.createElement('div')
+            indicator.className = 'offscreen-indicator'
+            const arrow = document.createElement('div')
+            arrow.className = 'offscreen-arrow'
+            arrow.style.borderBottomColor = target.color
+            indicator.appendChild(arrow)
+            indicatorContainer.appendChild(indicator)
+            activeIndicators.set(target.id, indicator)
+        }
+
+        // Project position to screen space
+        const targetPos = new Vector3(target.x, TILE_SIZE/2, target.z)
+        const screenPos = Vector3.Project(
+            targetPos,
+            Matrix.Identity(),
+            scene.getTransformMatrix(),
+            camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
+        )
+
+        const screenWidth = engine.getRenderWidth()
+        const screenHeight = engine.getRenderHeight()
+        const padding = 40 // Margin from edge
+
+        // Check if onscreen
+        // Note: screenPos.x/y are in pixels from top-left (BabylonJS uses bottom-left for viewport usually, but Project returns screen coordinates?)
+        // Let's verify Babylon Project. Returns x, y, z where x, y are in pixels (0,0 is usually top-left for overlay logic depending on viewport, but Babylon engine standard is bottom-left? No, usually coordinate system needs checking)
+        // Actually, Project returns coordinates in window space usually.
+        // Let's check if it's within bounds.
+        
+        const isOffscreen = screenPos.x < padding || screenPos.x > screenWidth - padding || 
+                            screenPos.y < padding || screenPos.y > screenHeight - padding
+        
+        if (isOffscreen) {
+            indicator.style.display = 'flex'
+            
+            // Calculate clamped position
+            const centerX = screenWidth / 2
+            const centerY = screenHeight / 2
+            
+            // Vector from center to target
+            // screenPos z is depth (0-1). If z < 0 or > 1, it's clipped by near/far planes.
+            // But we care about X/Y being outside viewport.
+            
+            let dx = screenPos.x - centerX
+            let dy = screenPos.y - centerY
+            
+            // If behind camera (shouldn't happen in top-down ortho usually, but safe to check)
+            // Just use the direction
+            
+            const angle = Math.atan2(dy, dx)
+            
+            // Ray intersection with simplified box (screen bounds minus padding)
+            // Tan(angle) = y/x
+            // We want to find x,y on the box border.
+            
+            const boxW = (screenWidth / 2) - padding
+            const boxH = (screenHeight / 2) - padding
+            
+            // Normalize direction
+            // Calculate intersection with vertical edges
+            let intersectX = dx > 0 ? boxW : -boxW
+            let intersectY = intersectX * Math.tan(angle)
+            
+            // If y intersection is out of bounds, check horizontal edges
+            if (Math.abs(intersectY) > boxH) {
+                intersectY = dy > 0 ? boxH : -boxH
+                intersectX = intersectY / Math.tan(angle)
+            }
+            
+            const finalX = centerX + intersectX
+            const finalY = centerY + intersectY
+            
+            // Update CSS
+            indicator.style.left = `${finalX - 20}px` // Center the 40px div
+            indicator.style.top = `${finalY - 20}px`
+            
+            // Rotation: angle + 90deg because arrow points up by default
+            const rotationDeg = (angle * 180 / Math.PI) + 90
+            indicator.style.transform = `rotate(${rotationDeg}deg)`
+            
+        } else {
+            indicator.style.display = 'none'
+        }
+    })
+
+    // Clean up indicators for inactive targets (e.g. dead enemies)
+    // Though usually enemies stay in array? Yes, logic uses enemy.lives > 0
+    // If enemy dies, we should hide/remove.
+    // Ideally we diff the map keys vs current active keys.
+    const activeIds = new Set(targets.map(t => t.id))
+    activeIndicators.forEach((el, id) => {
+        if (!activeIds.has(id)) {
+            el.remove()
+            activeIndicators.delete(id)
+        }
+    })
+  }
+
   // Game loop update
   let lastTime = Date.now()
   scene.onBeforeRenderObservable.add(() => {
@@ -2747,6 +2899,41 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       // Process held keys for smooth continuous movement
       processHeldKeys()
       
+      // Camera follow logic for mobile
+      if (isMobile()) {
+        const targetX = player.position.x
+        const targetZ = player.position.z
+        
+        const minX = -halfWorldWidth - margin + viewportHalfWidth
+        const maxX = halfWorldWidth + margin - viewportHalfWidth
+        const minZ = -halfWorldHeight - margin + viewportHalfHeight
+        const maxZ = halfWorldHeight + margin - viewportHalfHeight
+        
+        // Handle case where viewport is larger than world (center camera)
+        let clampedX = 0
+        let clampedZ = 0
+        
+        if (minX > maxX) {
+            clampedX = 0
+        } else {
+            clampedX = Math.max(minX, Math.min(maxX, targetX))
+        }
+        
+        if (minZ > maxZ) {
+            clampedZ = 0
+        } else {
+            clampedZ = Math.max(minZ, Math.min(maxZ, targetZ))
+        }
+        
+        // Smoothly interpolate camera target
+        const lerpSpeed = 0.1
+        camera.target.x = camera.target.x + (clampedX - camera.target.x) * lerpSpeed
+        camera.target.z = camera.target.z + (clampedZ - camera.target.z) * lerpSpeed
+      }
+      
+      // Call indicator update
+      updateOffscreenIndicators()
+
       updateBombs(deltaTime)
       updateEnemies(deltaTime)
       updateInvulnerability(deltaTime)
