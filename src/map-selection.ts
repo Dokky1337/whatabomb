@@ -47,8 +47,8 @@ export function createMapSelectionScreen(
 
   const allKeys = Object.keys(MAP_CONFIGS)
   const mapKeys = isMobile()
-    ? allKeys.filter(key => MAP_CONFIGS[key].size !== 'large')
-    : allKeys
+    ? allKeys.filter(key => MAP_CONFIGS[key].size === 'small')
+    : allKeys.filter(key => key !== 'small-moon')
 
   mapKeys.forEach((key) => {
     const map = MAP_CONFIGS[key]
@@ -177,6 +177,10 @@ function getThemeGradient(theme: string): string {
       return 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
     case 'forest':
       return 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
+    case 'moon':
+      return 'linear-gradient(135deg, #2c3e50 0%, #bdc3c7 100%)'
+    case 'space':
+      return 'linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)'
     default:
       return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
   }
@@ -190,6 +194,10 @@ function getThemeIcon(theme: string): string {
       return '🌋'
     case 'forest':
       return '🌲'
+    case 'moon':
+      return '🌑'
+    case 'space':
+      return '🌌'
     default:
       return '🏟️'
   }

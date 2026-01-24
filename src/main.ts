@@ -860,8 +860,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     const pauseBtn = document.createElement('div')
     pauseBtn.innerHTML = '⏸️'
     pauseBtn.style.position = 'absolute'
-    pauseBtn.style.top = '15px'
-    pauseBtn.style.left = '15px'
+    pauseBtn.style.top = '45%'
+    pauseBtn.style.right = '15px'
+    pauseBtn.style.left = 'auto'
     pauseBtn.style.width = '40px'
     pauseBtn.style.height = '40px'
     pauseBtn.id = "mobile-pause-btn"
@@ -892,9 +893,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   playerUIDiv.className = 'game-ui-panel'
   playerUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-    // Bottom Left, above D-Pad
-    playerUIDiv.style.bottom = '175px'
-    playerUIDiv.style.left = '15px'
+    // Bottom Left, under D-Pad controls (background for them)
+    playerUIDiv.style.bottom = '10px'
+    playerUIDiv.style.left = '10px'
     playerUIDiv.style.top = 'auto'
     
     // Scale scale small
@@ -949,21 +950,22 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   opponentUIDiv.className = 'game-ui-panel'
   opponentUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-      // Bottom Right, above Action Button
-      opponentUIDiv.style.bottom = '125px'
-      opponentUIDiv.style.right = '15px'
+      // Bottom Right, under Action Button (background for it)
+      opponentUIDiv.style.bottom = '10px'
+      opponentUIDiv.style.right = '10px'
       opponentUIDiv.style.top = 'auto'
       
       // Scale down slightly
       opponentUIDiv.style.transform = 'scale(0.8)'
       opponentUIDiv.style.transformOrigin = 'bottom right'
-      opponentUIDiv.style.display = 'block' // Actually show it but smaller at top right
+      opponentUIDiv.style.display = 'block'
   } else {
       opponentUIDiv.style.top = '15px'
       opponentUIDiv.style.right = '15px'
   }
-  opponentUIDiv.style.bottom = '15px'
-  opponentUIDiv.style.right = '15px'
+  if (!isMobileDevice) { // Only set bottom/right defaults for desktop if needed, currently overwritten above
+     opponentUIDiv.style.bottom = 'auto' 
+  }
   opponentUIDiv.style.color = 'white'
   opponentUIDiv.style.fontFamily = "'Russo One', sans-serif"
   opponentUIDiv.style.fontSize = '16px'

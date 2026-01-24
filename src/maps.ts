@@ -1,7 +1,7 @@
 import { Color3 } from '@babylonjs/core'
 
 export type MapSize = 'small' | 'medium' | 'large'
-export type MapTheme = 'classic' | 'ice' | 'lava' | 'forest' | 'space'
+export type MapTheme = 'classic' | 'ice' | 'lava' | 'forest' | 'space' | 'moon'
 
 export interface MapConfig {
   size: MapSize
@@ -31,6 +31,20 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
       wall: new Color3(0.5, 0.5, 0.5),
       destructible: new Color3(0.7, 0.6, 0.4),
       ambient: new Color3(0.1, 0.2, 0.1),
+    },
+  },
+  'small-moon': {
+    size: 'small',
+    theme: 'moon',
+    gridWidth: 11,
+    gridHeight: 11,
+    name: 'Moon Base',
+    description: 'Low gravity battles on the moon!',
+    colors: {
+      ground: new Color3(0.2, 0.2, 0.25),
+      wall: new Color3(0.4, 0.4, 0.45),
+      destructible: new Color3(0.6, 0.6, 0.65),
+      ambient: new Color3(0.1, 0.1, 0.15),
     },
   },
   'medium-classic': {
