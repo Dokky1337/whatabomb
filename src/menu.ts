@@ -53,8 +53,14 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
   menuDiv.style.height = '100vh'
   menuDiv.style.display = 'flex'
   menuDiv.style.flexDirection = 'column'
-  menuDiv.style.justifyContent = 'center'
+  // Use justify-content: flex-start with auto margin/padding to handle both small and large screens safely
+  menuDiv.style.justifyContent = 'flex-start'
   menuDiv.style.alignItems = 'center'
+  menuDiv.style.paddingTop = '50px' // Ensure breathing room at top
+  menuDiv.style.paddingBottom = '50px' // Ensure breathing room at bottom
+  menuDiv.style.overflowY = 'auto' // Allow vertical scrolling on all devices
+  menuDiv.style.boxSizing = 'border-box'
+  
   menuDiv.style.zIndex = '2000'
   menuDiv.style.fontFamily = "'Russo One', sans-serif"
   menuDiv.style.color = 'white'
@@ -76,6 +82,8 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
   subtitle.style.letterSpacing = '2px'
   menuDiv.appendChild(subtitle)
 
+  // Subtitle scaling response logic handled in style.css media queries now
+  
   const allModes: Array<{ mode: GameMode; label: string; icon: string }> = [
     { mode: '1v1', label: 'Player vs 1 AI', icon: '🤖' },
     { mode: '1v2', label: 'Player vs 2 AI', icon: '🤖🤖' },
@@ -160,7 +168,6 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
     { id: 'stats-button', text: '📊 Stats' },
     { id: 'achievements-button', text: '🏆 Achievements' },
     { id: 'tutorial-button', text: '📖 How to Play' },
-    { id: 'map-selection-button', text: '🗺️ Maps' },
   ]
 
   buttons.forEach(btn => {
@@ -193,15 +200,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
 
   menuDiv.appendChild(buttonContainer)
   
-  // Controls hint at bottom
-  const controlsHint = document.createElement('div')
-  controlsHint.style.position = 'absolute'
-  controlsHint.style.bottom = '20px'
-  controlsHint.style.color = '#666'
-  controlsHint.style.fontSize = '12px'
-  controlsHint.style.textAlign = 'center'
-  controlsHint.innerHTML = 'P1: WASD + Space | P2: Arrows + Enter | ESC: Pause'
-  menuDiv.appendChild(controlsHint)
+  // Controls hint removed per user request
 
   return menuDiv
 }

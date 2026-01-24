@@ -245,15 +245,17 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Mobile zoom adjustment: Reduce the visible area slightly to make everything bigger
   // A zoom factor < 1.0 means zooming in (showing less area)
   // A zoom factor > 1.0 means zooming out (showing more area)
-  // For mobile, we want to zoom in a bit, so we use something like 0.85
-  // But we must ensure the whole map is still visible if possible, or just accept some cutoff
-  // Since the user wants it "zoomed/a bit bigger", we can try reducing the margin or slightly scaling down logic
+  // User feedback V1.1: "Increase area of game a bit to get a bit more out of display"
+  // Previous V1.0 was 0.6. Increasing to 0.75 to show more area.
+  // User feedback V1.2: "Adjust the game area a bit more" -> Increasing to 0.85
   
-  const zoomFactor = isMobile() ? 0.6 : 1.0 
+  const zoomFactor = isMobile() ? 0.85 : 1.0 
   
   const margin = TILE_SIZE * 0.4
   // Extra vertical margin for mobile controls
-  const bottomMarginMobile = TILE_SIZE * 2.5
+  // Reduced bottom margin slightly as buttons are now overlaid higher up, 
+  // but we still want the player to center somewhat correctly.
+  const bottomMarginMobile = TILE_SIZE * 2.0
 
   // Apply zoom by modifying the boundaries
   // Note: changing halfWorldWidth effectively changes the viewing frustum size
@@ -887,6 +889,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     pauseBtn.style.width = '40px'
     pauseBtn.style.height = '40px'
     pauseBtn.id = "mobile-pause-btn"
+    pauseBtn.className = "mobile-pause-btn"
     pauseBtn.style.background = 'rgba(0,0,0,0.5)'
     pauseBtn.style.border = '2px solid rgba(255,255,255,0.3)'
     pauseBtn.style.borderRadius = '8px'
@@ -2541,12 +2544,16 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       
       const start = (e: Event) => {
         if (e.cancelable) e.preventDefault()
-        keysHeld.add(key)
+        if (!keysHeld.has(key)) {
+            keysHeld.add(key)
+            keyPressTime.set(key, Date.now())
+        }
         btn.classList.add('active')
       }
       const end = (e: Event) => {
         if (e.cancelable) e.preventDefault()
         keysHeld.delete(key)
+        keyPressTime.delete(key)
         btn.classList.remove('active')
       }
 
@@ -2602,6 +2609,70 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   
   // Movement function that can be called repeatedly
   function movePlayer1(dx: number, dy: number, currentTime: number): boolean {
+    // Check arrow keys or WASD
+    
+    // Check if initial delay has passed (tap vs hold)
+    // If movement is triggered less than REPEAT_DELAY after press, it's the INITIAL move.
+    // If it's been held longer, we use normal moveDelay.
+    
+    // However, processHeldKeys calls this repeatedly.
+    // We need to enforce: 
+    // 1. First call (when key pressed) -> Move instantly.
+    // 2. Subsequent calls -> Block until REPEAT_DELAY passed since press.
+    // 3. After REPEAT_DELAY -> Allow move every moveDelay.
+    
+    // BUT lastMoveTime tracks global movement cooldown.
+    // We need to check if we are in the "wait for repeat" phase.
+    
+    // Let's rely on lastMoveTime for the repetition rate, but modulate WHEN we can move.
+    
+    // Logic:
+    // If timeSincePress < REPEAT_DELAY:
+    //    Allow move ONLY IF this is the FIRST move since press.
+    //    We can check this by seeing if lastMoveTime < pressTime? 
+    //    Yes! If lastMoveTime < pressTime, we haven't moved yet for this press.
+    
+    // If timeSincePress >= REPEAT_DELAY:
+    //    Allow move if (currentTime - lastMoveTime > moveDelay)
+    
+    // But wait, if we have multiple keys held?
+    // Let's just solve for mobile D-Pad single key scenario mostly.
+    
+    // Find the oldest pressed key that matches direction? Or just check against ANY recent key press?
+    
+    // Let's implement logic: 
+    
+    // We need to check the startTime for the key driving this movement.
+    // Since we're inside movePlayer1(dx, dy), specific to direction...
+    // We'll approximate the key check from movement direction for simplicity:
+    let relevantKeys: string[] = []
+    if (dx === -1) relevantKeys = ['w', 'W', 'ArrowUp']
+    if (dx === 1) relevantKeys = ['s', 'S', 'ArrowDown']
+    if (dy === -1) relevantKeys = ['a', 'A', 'ArrowLeft']
+    if (dy === 1) relevantKeys = ['d', 'D', 'ArrowRight']
+    
+    let pressTime = 0
+    for (const k of relevantKeys) {
+        if (keyPressTime.has(k)) {
+            pressTime = Math.max(pressTime, keyPressTime.get(k) || 0)
+        }
+    }
+    
+    if (pressTime > 0) {
+        const timeSincePress = currentTime - pressTime
+        
+        // Phase 1: Initial Move
+        if (timeSincePress < REPEAT_DELAY) {
+            // Only move if we haven't moved for this press yet
+            // If lastMoveTime is OLDER than pressTime, it means this is the first move.
+            if (lastMoveTime >= pressTime) {
+                return false // We already moved for this press, waiting for repeat delay
+            }
+        }
+        // Phase 2: Rapid Repeat
+        // If timeSincePress >= REPEAT_DELAY, we fall through to normal speed check
+    }
+
     if (currentTime - lastMoveTime < moveDelay) return false
     
     lastDx = dx
@@ -2703,6 +2774,15 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     }
   }
 
+  // Move tracking for tap vs hold logic
+  // We want: initial press -> 1 move immediately.
+  // Then wait for REPEAT_DELAY (e.g. 200ms).
+  // Then if still held, move every moveDelay (depends on speed).
+  // This prevents "double move" on quick taps when speed is high (and moveDelay is low).
+  
+  let keyPressTime: Map<string, number> = new Map() // When was the key first pressed?
+  const REPEAT_DELAY = 180 // ms before repeating starts
+  
   // Keyboard handlers
   const keydownHandler = (ev: KeyboardEvent) => {
     // Pause/Escape handling
@@ -2720,7 +2800,21 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     if (gameOver || isPaused) return
 
     // Add key to held set
-    keysHeld.add(ev.key)
+    if (!keysHeld.has(ev.key)) {
+        keysHeld.add(ev.key)
+        keyPressTime.set(ev.key, Date.now()) // Track start time of press
+        
+        // IMMEDIATE MOVE on press (if cooldown allows, but we force it for responsiveness?)
+        // Actually, processHeldKeys runs every frame. We should handle the logic there
+        // OR we can force a move here?
+        // Better to let processHeldKeys handle it, but we need to reset "lastMoveTime" logic?
+        // No, processHeldKeys checks "currentTime - lastMoveTime".
+        // If we want to force a move immediately regardless of previous cooldown?
+        // Typically, yes, a fresh keypress usually overrides a lingering cooldown slightly for responsiveness,
+        // unless it's very fast spamming.
+        // But the issue is the OPPOSITE: moving too much.
+        // So we don't force move here. We just mark the start time.
+    }
 
     // Handle bomb placement (immediate, not held)
     if (ev.key === ' ') {
@@ -2746,6 +2840,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   
   const keyupHandler = (ev: KeyboardEvent) => {
     keysHeld.delete(ev.key)
+    keyPressTime.delete(ev.key)
   }
   
   window.addEventListener('keydown', keydownHandler)
@@ -3041,15 +3136,16 @@ const pauseMenu = createPauseMenu(
     }
     
     // Remove UI elements
+    // Added .mobile-pause-btn to cleanup list
+    const elementsToRemove = ['.game-ui-panel', '.center-ui', '.mobile-controls-container', '.offscreen-indicator', '.mobile-pause-btn']
+    elementsToRemove.forEach(selector => {
+      document.querySelectorAll(selector).forEach(el => el.remove())
+    })
     document.querySelectorAll('#app > div').forEach(el => {
       if (el.id !== 'main-menu' && el.id !== 'pause-menu') {
         el.remove()
       }
     })
-
-    // Remove mobile controls
-    const mobileControls = document.querySelector('.mobile-controls-container')
-    if (mobileControls) mobileControls.remove()
   }
 )
 document.body.appendChild(pauseMenu)
