@@ -511,8 +511,8 @@ body {
 
 .dpad {
   position: absolute;
-  /* Moved up to clear player text UI */
-  bottom: 150px;
+  /* Lowered to not cover game area */
+  bottom: 80px;
   left: 20px;
   width: 150px;
   height: 150px;
@@ -577,8 +577,8 @@ body {
 
 .action-btn-container {
   position: absolute;
-  /* Moved up to clear enemy/status text UI */
-  bottom: 160px;
+  /* Lowered to not cover game area */
+  bottom: 90px;
   right: 30px;
   pointer-events: auto;
 }

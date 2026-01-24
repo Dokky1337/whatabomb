@@ -227,12 +227,20 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Camera: straight down for flat top-down view
   const maxDimension = Math.max(GRID_WIDTH, GRID_HEIGHT)
   const cameraRadius = maxDimension * 1.2
+  
+  // On mobile for larger maps, offset the camera up so bottom row isn't covered by controls
+  const isLargeMap = GRID_HEIGHT >= 17
+  // Negative Z moves camera target up, shifting the visible world down (showing more of top, less of bottom)
+  // We want to shift the world UP on screen (so bottom row moves away from controls)
+  // That means we need the camera to look at a point with NEGATIVE Z offset
+  const mobileVerticalOffset = (isMobile() && isLargeMap) ? -TILE_SIZE * 5.5 : 0
+  
   const camera = new ArcRotateCamera(
     'camera',
     0, // Horizontal angle
     0, // Vertical angle (straight down)
     cameraRadius,
-    new Vector3(0, 0, 0),
+    new Vector3(0, 0, mobileVerticalOffset),
     scene,
   )
   
@@ -248,14 +256,16 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // User feedback V1.1: "Increase area of game a bit to get a bit more out of display"
   // Previous V1.0 was 0.6. Increasing to 0.75 to show more area.
   // User feedback V1.2: "Adjust the game area a bit more" -> Increasing to 0.85
+  // For larger maps on mobile, zoom in more (0.75) to make tiles bigger
   
-  const zoomFactor = isMobile() ? 0.85 : 1.0 
+  let zoomFactor = 1.0
+  if (isMobile()) {
+    zoomFactor = isLargeMap ? 0.70 : 0.85
+  } 
   
   const margin = TILE_SIZE * 0.4
-  // Extra vertical margin for mobile controls
-  // Reduced bottom margin slightly as buttons are now overlaid higher up, 
-  // but we still want the player to center somewhat correctly.
-  const bottomMarginMobile = TILE_SIZE * 2.0
+  // Extra vertical margin for mobile controls - larger margin for larger maps
+  const bottomMarginMobile = isLargeMap ? TILE_SIZE * 3.5 : TILE_SIZE * 2.0
 
   // Apply zoom by modifying the boundaries
   // Note: changing halfWorldWidth effectively changes the viewing frustum size
