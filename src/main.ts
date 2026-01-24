@@ -112,15 +112,10 @@ function createGrid(width: number, height: number): Grid {
     const row: TileType[] = []
     for (let x = 0; x < width; x++) {
       const isBorder = x === 0 || y === 0 || x === width - 1 || y === height - 1
-      // Don't place pillars on the edge rows (y=1 and y=height-2) for clear paths
-      const isEdgeRow = y === 1 || y === height - 2
-      const isInnerPillar = x % 2 === 0 && y % 2 === 0 && !isEdgeRow
+      const isInnerPillar = x % 2 === 0 && y % 2 === 0
 
       if (isBorder || isInnerPillar) {
         row.push('wall')
-      } else if (isEdgeRow) {
-        // Keep edge rows empty for movement
-        row.push('empty')
       } else {
         // Add destructible blocks randomly (about 80% of empty tiles)
         if (Math.random() < 0.8) {
