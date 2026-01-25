@@ -27,10 +27,10 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
     name: 'Small Arena',
     description: 'Fast-paced battles, good for mobile devices',
     colors: {
-      ground: new Color3(0.15, 0.35, 0.15),
-      wall: new Color3(0.5, 0.5, 0.5),
-      destructible: new Color3(0.7, 0.6, 0.4),
-      ambient: new Color3(0.1, 0.2, 0.1),
+      ground: new Color3(0.2, 0.45, 0.2), // More vibrant green
+      wall: new Color3(0.55, 0.55, 0.6), // Brighter wall
+      destructible: new Color3(0.8, 0.7, 0.4), // Brighter wood/box content
+      ambient: new Color3(0.15, 0.25, 0.15), // Slightly brighter ambient
     },
   },
   'small-moon': {
@@ -55,10 +55,10 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
     name: 'Small Ice Arena',
     description: 'Quick frozen battles',
     colors: {
-      ground: new Color3(0.7, 0.85, 0.95),
-      wall: new Color3(0.5, 0.7, 0.9),
-      destructible: new Color3(0.8, 0.9, 1.0),
-      ambient: new Color3(0.6, 0.7, 0.8),
+      ground: new Color3(0.7, 0.9, 1.0), // Brighter ice
+      wall: new Color3(0.6, 0.8, 1.0), // Brighter ice wall
+      destructible: new Color3(0.9, 0.95, 1.0), // Very bright ice block
+      ambient: new Color3(0.7, 0.8, 0.9), // Bright ambient
     },
   },
   'small-lava': {
@@ -69,10 +69,10 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
     name: 'Small Lava Arena',
     description: 'Intense volcanic action',
     colors: {
-      ground: new Color3(0.3, 0.1, 0.05),
-      wall: new Color3(0.2, 0.2, 0.2),
-      destructible: new Color3(0.6, 0.3, 0.1),
-      ambient: new Color3(0.3, 0.1, 0.0),
+      ground: new Color3(0.4, 0.1, 0.05), // Brighter lava ground
+      wall: new Color3(0.3, 0.2, 0.2), 
+      destructible: new Color3(0.8, 0.4, 0.1), // Bright hot rock
+      ambient: new Color3(0.4, 0.2, 0.1),
     },
   },
   'small-forest': {
@@ -83,10 +83,10 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
     name: 'Small Forest Arena',
     description: 'Quick woodland skirmishes',
     colors: {
-      ground: new Color3(0.2, 0.4, 0.15),
-      wall: new Color3(0.3, 0.25, 0.2),
-      destructible: new Color3(0.5, 0.35, 0.2),
-      ambient: new Color3(0.15, 0.25, 0.1),
+      ground: new Color3(0.25, 0.55, 0.2), // Vibrant forest green
+      wall: new Color3(0.4, 0.3, 0.2), // Brighter wood wall
+      destructible: new Color3(0.6, 0.4, 0.2), // Vibrant wood
+      ambient: new Color3(0.2, 0.3, 0.15),
     },
   },
   'medium-classic': {
@@ -97,10 +97,10 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
     name: 'Classic Arena',
     description: 'The original battlefield',
     colors: {
-      ground: new Color3(0.15, 0.35, 0.15),
-      wall: new Color3(0.5, 0.5, 0.5),
-      destructible: new Color3(0.7, 0.6, 0.4),
-      ambient: new Color3(0.1, 0.2, 0.1),
+      ground: new Color3(0.2, 0.45, 0.2),
+      wall: new Color3(0.55, 0.55, 0.6),
+      destructible: new Color3(0.8, 0.7, 0.4),
+      ambient: new Color3(0.15, 0.25, 0.15),
     },
   },
   'medium-ice': {
@@ -111,10 +111,10 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
     name: 'Ice Arena',
     description: 'Frozen battlefield with icy colors',
     colors: {
-      ground: new Color3(0.7, 0.85, 0.95),
-      wall: new Color3(0.5, 0.7, 0.9),
-      destructible: new Color3(0.8, 0.9, 1.0),
-      ambient: new Color3(0.6, 0.7, 0.8),
+      ground: new Color3(0.7, 0.9, 1.0),
+      wall: new Color3(0.6, 0.8, 1.0),
+      destructible: new Color3(0.9, 0.95, 1.0),
+      ambient: new Color3(0.7, 0.8, 0.9),
     },
   },
   'medium-lava': {
@@ -125,10 +125,10 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
     name: 'Lava Arena',
     description: 'Volcanic battlefield with fiery colors',
     colors: {
-      ground: new Color3(0.3, 0.1, 0.05),
-      wall: new Color3(0.2, 0.2, 0.2),
-      destructible: new Color3(0.6, 0.3, 0.1),
-      ambient: new Color3(0.3, 0.1, 0.0),
+      ground: new Color3(0.4, 0.1, 0.05),
+      wall: new Color3(0.3, 0.2, 0.2), 
+      destructible: new Color3(0.8, 0.4, 0.1),
+      ambient: new Color3(0.4, 0.2, 0.1),
     },
   },
   'medium-forest': {
@@ -139,10 +139,10 @@ export const MAP_CONFIGS: Record<string, MapConfig> = {
     name: 'Forest Arena',
     description: 'Natural battlefield with earthy colors',
     colors: {
-      ground: new Color3(0.2, 0.4, 0.15),
-      wall: new Color3(0.3, 0.25, 0.2),
-      destructible: new Color3(0.5, 0.35, 0.2),
-      ambient: new Color3(0.15, 0.25, 0.1),
+      ground: new Color3(0.25, 0.55, 0.2),
+      wall: new Color3(0.4, 0.3, 0.2),
+      destructible: new Color3(0.6, 0.4, 0.2),
+      ambient: new Color3(0.2, 0.3, 0.15),
     },
   },
   'medium-space': {

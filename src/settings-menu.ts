@@ -1,4 +1,4 @@
-import { SettingsManager, PLAYER_COLORS } from './settings'
+import { SettingsManager, PLAYER_COLORS, CHARACTER_SHAPES } from './settings'
 import { SoundManager } from './sound-manager'
 
 export function createSettingsMenu(
@@ -101,6 +101,17 @@ export function createSettingsMenu(
   )
   settingsContainer.appendChild(difficultySection)
 
+  // Character Shape Selection
+  const characterShapeSection = createDropdownSetting(
+    'Character Shape',
+    CHARACTER_SHAPES,
+    settings.characterShape || 'sphere',
+    (value) => {
+      settingsManager.setCharacterShape(value as any)
+    }
+  )
+  settingsContainer.appendChild(characterShapeSection)
+
   // Player 1 Color
   const player1ColorSection = createColorSetting(
     'Player 1 Color',
@@ -162,6 +173,53 @@ export function createSettingsMenu(
   settingsDiv.appendChild(closeButton)
 
   return settingsDiv
+}
+
+function createDropdownSetting(
+  label: string,
+  options: { name: string, value: string }[],
+  currentValue: string,
+  onChange: (value: string) => void
+): HTMLDivElement {
+  const container = document.createElement('div')
+  container.style.marginBottom = '20px'
+  container.style.display = 'flex'
+  container.style.flexDirection = 'column'
+
+  const labelEl = document.createElement('label')
+  labelEl.textContent = label
+  labelEl.style.marginBottom = '8px'
+  labelEl.style.fontSize = '14px'
+  labelEl.style.color = '#ccc'
+  container.appendChild(labelEl)
+
+  const select = document.createElement('select')
+  select.style.padding = '10px'
+  select.style.borderRadius = '5px'
+  select.style.border = 'none'
+  select.style.background = '#32324e'
+  select.style.color = 'white'
+  select.style.fontFamily = "'Russo One', sans-serif"
+  select.style.fontSize = '14px'
+  select.style.cursor = 'pointer'
+
+  options.forEach(opt => {
+    const option = document.createElement('option')
+    option.value = opt.value
+    option.textContent = opt.name
+    if (opt.value === currentValue) {
+      option.selected = true
+    }
+    select.appendChild(option)
+  })
+
+  select.addEventListener('change', (e) => {
+    const target = e.target as HTMLSelectElement
+    onChange(target.value)
+  })
+
+  container.appendChild(select)
+  return container
 }
 
 function createSliderSetting(

@@ -428,13 +428,24 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     ctx.fillRect(0, 10, 128, 10)
     ctx.fillRect(0, 108, 128, 10)
     
-    // Diagonals
-    ctx.strokeStyle = '#5a3a1a'
-    ctx.lineWidth = 5
+    // Colorful patterns (Circles/Stars)
+    ctx.fillStyle = '#d97706' // Lighter wood/orange spot
     ctx.beginPath()
-    ctx.moveTo(0, 0); ctx.lineTo(128, 128)
-    ctx.moveTo(128, 0); ctx.lineTo(0, 128)
+    ctx.arc(64, 64, 30, 0, Math.PI * 2)
+    ctx.fill()
+    
+    ctx.strokeStyle = '#fcd34d' // Bright yellow ring
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.arc(64, 64, 25, 0, Math.PI * 2)
     ctx.stroke()
+
+    // Corner accents
+    ctx.fillStyle = '#ef4444' // Red corners
+    ctx.fillRect(0, 0, 20, 20)
+    ctx.fillRect(108, 0, 20, 20)
+    ctx.fillRect(0, 108, 20, 20)
+    ctx.fillRect(108, 108, 20, 20)
   })
   
   const crateMaterial = new StandardMaterial('crateMat', scene)
@@ -657,34 +668,136 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     whiteMat.diffuseColor = new Color3(1, 1, 1)
     whiteMat.emissiveColor = new Color3(1, 1, 1)
 
+    // Create 3D character mesh based on settings
+    // Default shape to sphere if strict match isn't found, 
+    // but try to respect settingsManager if it's the player
+    let shape = 'sphere'
+    if (name === 'player') {
+      shape = settingsManager.getSettings().characterShape || 'sphere'
+    } else if (name === 'player-2') {
+      shape = settingsManager.getSettings().characterShape || 'sphere'
+    } else if (name.includes('enemy')) {
+      shape = ['sphere', 'cat', 'dog'][Math.floor(Math.random() * 3)]
+    }
+
     // BODY (Sphere-like)
-    const body = MeshBuilder.CreateSphere(name + '-body', { diameter: TILE_SIZE * 0.5 }, scene)
+    let body: any
+    let head: any
+    let ears: any[] = []
+    let tail: any
+
+    body = MeshBuilder.CreateSphere(name + '-body', { diameter: TILE_SIZE * 0.5 }, scene)
     body.position.y = TILE_SIZE * 0.25
     body.material = bodyMat
     body.parent = root
 
-    // HEAD (Sphere)
-    const head = MeshBuilder.CreateSphere(name + '-head', { diameter: TILE_SIZE * 0.4 }, scene)
+    // HEAD
+    if (shape === 'cat') {
+        head = MeshBuilder.CreateSphere(name + '-head', { diameter: TILE_SIZE * 0.4 }, scene)
+        
+        // Pointy ears (Cones) - more visible
+        const ear1 = MeshBuilder.CreateCylinder(name + '-ear1', { height: 0.2, diameterTop: 0.0, diameterBottom: 0.15, tessellation: 3 }, scene)
+        ear1.material = bodyMat 
+        ear1.position = new Vector3(-0.12, 0.2, 0)
+        ear1.rotation.z = 0.4
+        ear1.parent = head
+        
+        const ear2 = MeshBuilder.CreateCylinder(name + '-ear2', { height: 0.2, diameterTop: 0.0, diameterBottom: 0.15, tessellation: 3 }, scene)
+        ear2.material = bodyMat
+        ear2.position = new Vector3(0.12, 0.2, 0)
+        ear2.rotation.z = -0.4
+        ear2.parent = head
+        
+        ears.push(ear1, ear2)
+        
+        // Whiskers (thin cylinders)
+        const whiskerLeft = MeshBuilder.CreateCylinder(name + '-whiskerL', { height: 0.3, diameter: 0.02 }, scene)
+        whiskerLeft.rotation.z = Math.PI / 2
+        whiskerLeft.position = new Vector3(-0.15, -0.05, 0.15)
+        whiskerLeft.material = darkMat
+        whiskerLeft.parent = head
+
+        const whiskerRight = MeshBuilder.CreateCylinder(name + '-whiskerR', { height: 0.3, diameter: 0.02 }, scene)
+        whiskerRight.rotation.z = Math.PI / 2
+        whiskerRight.position = new Vector3(0.15, -0.05, 0.15)
+        whiskerRight.material = darkMat
+        whiskerRight.parent = head
+
+        // Tail
+        tail = MeshBuilder.CreateCylinder(name + '-tail', { height: 0.4, diameter: 0.05 }, scene)
+        tail.material = bodyMat
+        tail.position = new Vector3(0, 0.1, -0.25)
+        tail.rotation.x = Math.PI / 3
+        tail.parent = root 
+
+    } else if (shape === 'dog') {
+        head = MeshBuilder.CreateSphere(name + '-head', { diameter: TILE_SIZE * 0.4 }, scene)
+        
+        // Floppy ears (Hanging down)
+        // Rotate nearly 180 degrees (Math.PI) to hang down, with slight offset
+        const ear1 = MeshBuilder.CreateBox(name + '-ear1', { width: 0.1, height: 0.35, depth: 0.05 }, scene)
+        ear1.material = bodyMat 
+        ear1.position = new Vector3(-0.2, 0.1, 0) // Attach higher on head
+        ear1.rotation.z = Math.PI - 0.3 // Hangs down and out
+        ear1.parent = head
+        
+        const ear2 = MeshBuilder.CreateBox(name + '-ear2', { width: 0.1, height: 0.35, depth: 0.05 }, scene)
+        ear2.material = bodyMat
+        ear2.position = new Vector3(0.2, 0.1, 0)
+        ear2.rotation.z = -(Math.PI - 0.3)
+        ear2.parent = head
+        
+        ears.push(ear1, ear2)
+        
+        // Snout - Longer and narrower (Dog-like)
+        const snout = MeshBuilder.CreateBox(name + '-snout', { width: 0.16, height: 0.12, depth: 0.22 }, scene)
+        snout.material = skinMat // Or bodyMat? skinMat provides contrast.
+        snout.position = new Vector3(0, -0.05, 0.2) // Further out
+        snout.parent = head
+        
+        // Nose Tip (Black button nose)
+        const nose = MeshBuilder.CreateSphere(name + '-nose', { diameter: 0.08 }, scene)
+        nose.material = darkMat
+        nose.position = new Vector3(0, 0, 0.11) // Relative to snout center (depth/2)
+        nose.parent = snout
+
+        // Tail
+        tail = MeshBuilder.CreateCylinder(name + '-tail', { height: 0.35, diameter: 0.06 }, scene)
+        tail.material = bodyMat
+        tail.position = new Vector3(0, 0.1, -0.25)
+        tail.rotation.x = Math.PI / 4
+        tail.parent = root
+
+    } else {
+        // Classic Sphere
+        head = MeshBuilder.CreateSphere(name + '-head', { diameter: TILE_SIZE * 0.4 }, scene)
+    }
+
     head.position.y = TILE_SIZE * 0.6
     head.material = skinMat
     head.parent = root
 
-    // HELMET/HAT (Half sphere or just top part)
-    const helmet = MeshBuilder.CreateSphere(name + '-helmet', { diameter: TILE_SIZE * 0.42, slice: 0.5 }, scene)
-    helmet.rotation.x = Math.PI
-    helmet.position.y = 0
-    helmet.material = bodyMat
-    helmet.parent = head
+    // HELMET/HAT (Only for classic or if requested, let's keep it simple for animals)
+    if (shape === 'sphere') {
+      const helmet = MeshBuilder.CreateSphere(name + '-helmet', { diameter: TILE_SIZE * 0.42, slice: 0.5 }, scene)
+      helmet.rotation.x = Math.PI
+      helmet.position.y = 0
+      helmet.material = bodyMat
+      helmet.parent = head
+    }
 
     // EYES
     const leftEye = MeshBuilder.CreateSphere(name + '-leftEye', { diameter: TILE_SIZE * 0.1 }, scene)
-    leftEye.position = new Vector3(-0.06 * TILE_SIZE, 0.05 * TILE_SIZE, 0.15 * TILE_SIZE)
+    let eyeZ = 0.15 * TILE_SIZE
+    if (shape === 'dog') eyeZ += 0.08 * TILE_SIZE // Move eyes further forward for dog
+    
+    leftEye.position = new Vector3(-0.08 * TILE_SIZE, 0.08 * TILE_SIZE, eyeZ) // Wider set eyes
     leftEye.scaling.z = 0.5
     leftEye.material = darkMat
     leftEye.parent = head
 
     const rightEye = MeshBuilder.CreateSphere(name + '-rightEye', { diameter: TILE_SIZE * 0.1 }, scene)
-    rightEye.position = new Vector3(0.06 * TILE_SIZE, 0.05 * TILE_SIZE, 0.15 * TILE_SIZE)
+    rightEye.position = new Vector3(0.08 * TILE_SIZE, 0.08 * TILE_SIZE, eyeZ)
     rightEye.scaling.z = 0.5
     rightEye.material = darkMat
     rightEye.parent = head
@@ -730,11 +843,17 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     // Register visual update
     // Note: We use scene.onBeforeRenderObservable directly on the root to avoid leaking observers if disposed
     const observer = scene.onBeforeRenderObservable.add(() => {
+        const dt = scene.getEngine().getDeltaTime()
+        
         if (isMoving) {
-            animTime += 0.2
+            // Use time-based animation for consistency across frame rates
+            // 0.012 * 16ms approx 0.2 per frame (old value)
+            animTime += dt * 0.035
             
             // Walking animation - swing arms forward/back (Y axis for up/down motion)
             // Arms swing opposite to each other
+            // Use sin^2 or smoother curve if needed, but sin is generally fine for walking
+            
             leftHand.position.y = 0.3 * TILE_SIZE + Math.sin(animTime) * 0.08 * TILE_SIZE
             rightHand.position.y = 0.3 * TILE_SIZE + Math.sin(animTime + Math.PI) * 0.08 * TILE_SIZE
             
@@ -751,12 +870,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
             head.position.y = TILE_SIZE * 0.6 + breathe
             body.scaling.x = 1 + breathe * 0.5
             
-            // Reset limbs smoothly
-            const resetSpeed = 0.2
-            leftHand.position.y = leftHand.position.y + (0.3 * TILE_SIZE - leftHand.position.y) * resetSpeed
-            rightHand.position.y = rightHand.position.y + (0.3 * TILE_SIZE - rightHand.position.y) * resetSpeed
-            leftFoot.position.z = leftFoot.position.z * (1 - resetSpeed)
-            rightFoot.position.z = rightFoot.position.z * (1 - resetSpeed)
+            // Reset limbs smoothly (Lerp)
+            // Frame-rate independent lerp: a = a + (b-a) * (1 - exp(-dt * speed))
+            const lerpFactor = 1 - Math.pow(0.001, dt / 1000) 
+            
+            leftHand.position.y = leftHand.position.y + (0.3 * TILE_SIZE - leftHand.position.y) * lerpFactor
+            rightHand.position.y = rightHand.position.y + (0.3 * TILE_SIZE - rightHand.position.y) * lerpFactor
+            leftFoot.position.z = leftFoot.position.z * (1 - lerpFactor)
+            rightFoot.position.z = rightFoot.position.z * (1 - lerpFactor)
         }
     })
     
@@ -791,7 +912,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
             if ((root as any).stopTimer) clearTimeout((root as any).stopTimer)
             ;(root as any).stopTimer = setTimeout(() => {
                 isMoving = false
-            }, 100)
+            }, 300)
         }
     }
     
@@ -1433,6 +1554,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
               el.remove()
             }
           })
+          
+          // Explicitly remove mobile controls wrapper
+          document.querySelectorAll('.mobile-controls-wrapper').forEach(el => el.remove())
+          document.querySelectorAll('.mobile-pause-btn').forEach(el => el.remove())
         })
         buttonContainer.appendChild(menuBtn)
         
@@ -1573,7 +1698,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     // More dramatic fire colors
     particleSystem.color1 = new Color4(1, 0.8, 0.2, 1)  // Bright yellow
     particleSystem.color2 = new Color4(1, 0.3, 0, 1)    // Orange-red
-    particleSystem.colorDead = new Color4(0.3, 0.1, 0, 0)  // Fade to dark
+    particleSystem.colorDead = new Color4(0.2, 0.2, 0.2, 0)  // Fade to grey, not reddish black
 
     particleSystem.minSize = 0.15
     particleSystem.maxSize = 0.4
@@ -1605,40 +1730,63 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     }, 150)
   }
   
+  // Create a guaranteed white smoke texture
+  let smokeTexture: Texture | null = null
+  function getSmokeTexture(scene: Scene): Texture {
+    if (smokeTexture) return smokeTexture;
+    
+    // Create soft transparent circle
+    const dynamicTexture = new DynamicTexture("smokeTexture", 64, scene, false);
+    const ctx = dynamicTexture.getContext();
+    const size = dynamicTexture.getSize();
+    const mid = size.width / 2;
+    
+    ctx.clearRect(0, 0, size.width, size.height);
+    
+    // Radial gradient: White center -> Transparent edge
+    const gradient = ctx.createRadialGradient(mid, mid, 0, mid, mid, mid);
+    gradient.addColorStop(0, "rgba(255, 255, 255, 1.0)");
+    gradient.addColorStop(0.5, "rgba(220, 220, 220, 0.8)");
+    gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size.width, size.height);
+    
+    dynamicTexture.update();
+    smokeTexture = dynamicTexture;
+    return smokeTexture;
+  }
+  
   // Create smoke particles for after explosion
   function createSmokeParticles(x: number, y: number) {
-    const smokeSystem = new ParticleSystem('smoke', 30, scene)
+    const smokeSystem = new ParticleSystem('smoke', 50, scene)
     
     const emitter = MeshBuilder.CreateSphere('smoke-emitter', { diameter: 0.1 }, scene)
     emitter.position = gridToWorld(x, y)
     emitter.isVisible = false
     smokeSystem.emitter = emitter
     
-    try {
-      smokeSystem.particleTexture = new Texture(FLARE_TEXTURE_DATA_URI, scene)
-    } catch (e) {
-      smokeSystem.particleTexture = new Texture('', scene)
-    }
+    smokeSystem.particleTexture = getSmokeTexture(scene);
 
-    smokeSystem.color1 = new Color4(0.4, 0.4, 0.4, 0.6)
-    smokeSystem.color2 = new Color4(0.2, 0.2, 0.2, 0.4)
-    smokeSystem.colorDead = new Color4(0, 0, 0, 0)
+    smokeSystem.color1 = new Color4(0.9, 0.9, 0.9, 0.8) // White-ish, high opacity
+    smokeSystem.color2 = new Color4(0.7, 0.7, 0.7, 0.6) // Light Gray
+    smokeSystem.colorDead = new Color4(0.5, 0.5, 0.5, 0) // Fade to invisible gray
     
-    smokeSystem.minSize = 0.2
-    smokeSystem.maxSize = 0.5
+    smokeSystem.minSize = 0.4
+    smokeSystem.maxSize = 0.8
     
-    smokeSystem.minLifeTime = 0.5
-    smokeSystem.maxLifeTime = 1.0
+    smokeSystem.minLifeTime = 0.8
+    smokeSystem.maxLifeTime = 1.5
     
-    smokeSystem.emitRate = 50
-    smokeSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
+    smokeSystem.emitRate = 80
+    smokeSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD // Alpha blending for opaque smoke
     
-    smokeSystem.gravity = new Vector3(0, 1, 0)
-    smokeSystem.direction1 = new Vector3(-0.5, 1, -0.5)
-    smokeSystem.direction2 = new Vector3(0.5, 2, 0.5)
+    smokeSystem.gravity = new Vector3(0, 0.5, 0)
+    smokeSystem.direction1 = new Vector3(-0.5, 0.5, -0.5)
+    smokeSystem.direction2 = new Vector3(0.5, 1.5, 0.5)
     
     smokeSystem.minEmitPower = 0.5
-    smokeSystem.maxEmitPower = 1
+    smokeSystem.maxEmitPower = 1.2
     
     smokeSystem.start()
     
@@ -1647,8 +1795,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       setTimeout(() => {
         smokeSystem.dispose()
         emitter.dispose()
-      }, 1000)
-    }, 200)
+      }, 2000)
+    }, 300)
   }
 
   // Explode bomb function
@@ -2800,6 +2948,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     
     lastDx = dx
     lastDy = dy
+
+    // Always update visual direction even if blocked
+    if (player.playAnimation) {
+      if (dx < 0) player.playAnimation('walk-up')
+      else if (dx > 0) player.playAnimation('walk-down')
+      else if (dy < 0) player.playAnimation('walk-left')
+      else if (dy > 0) player.playAnimation('walk-right')
+    }
 
     const targetX = playerGridX + dx
     const targetY = playerGridY + dy

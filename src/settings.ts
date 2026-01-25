@@ -6,6 +6,7 @@ export interface GameSettings {
   difficulty: 'easy' | 'medium' | 'hard'
   player1Color: string
   player2Color: string
+  characterShape: 'sphere' | 'cat' | 'dog'
 }
 
 export const PLAYER_COLORS = [
@@ -17,6 +18,12 @@ export const PLAYER_COLORS = [
   { name: 'Pink', value: '#f472b6' },
   { name: 'Cyan', value: '#22d3ee' },
   { name: 'Orange', value: '#fb923c' },
+]
+
+export const CHARACTER_SHAPES = [
+  { name: 'Classic (Sphere)', value: 'sphere' },
+  { name: 'Cat', value: 'cat' },
+  { name: 'Dog', value: 'dog' },
 ]
 
 export class SettingsManager {
@@ -41,6 +48,7 @@ export class SettingsManager {
           difficulty: parsed.difficulty ?? 'medium',
           player1Color: parsed.player1Color ?? '#4ade80',
           player2Color: parsed.player2Color ?? '#60a5fa',
+          characterShape: parsed.characterShape ?? 'sphere',
         }
       } catch (e) {
         console.error('Failed to load settings:', e)
@@ -55,6 +63,7 @@ export class SettingsManager {
       difficulty: 'medium',
       player1Color: '#4ade80',
       player2Color: '#60a5fa',
+      characterShape: 'sphere',
     }
   }
 
@@ -98,6 +107,11 @@ export class SettingsManager {
 
   setPlayer2Color(color: string) {
     this.settings.player2Color = color
+    this.saveSettings()
+  }
+
+  setCharacterShape(shape: 'sphere' | 'cat' | 'dog') {
+    this.settings.characterShape = shape
     this.saveSettings()
   }
 }
