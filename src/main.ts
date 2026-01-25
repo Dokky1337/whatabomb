@@ -241,10 +241,6 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   gameStateManager.reset()
   if (gameMode === 'time-attack') {
     gameStateManager.initTimeAttack(180000, 5000) // 3 minutes, 5 sec bonus per kill
-  } else if (gameMode === 'pvp') {
-    gameStateManager.initRounds(2) // Best of 2 for PvP
-  } else if (gameMode !== 'survival') {
-    gameStateManager.initRounds(2) // Best of 2 for vs AI modes
   }
 
   // Camera: straight down for flat top-down view
@@ -1325,9 +1321,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   }
 
   function updateUI() {
-    // Update center UI (timer or rounds)
+    // Update center UI (timer)
     const timeAttackState = gameStateManager.getTimeAttackState()
-    const roundState = gameStateManager.getRoundState()
     
     if (gameMode === 'survival') {
       centerUIDiv.style.display = 'block'
@@ -1343,15 +1338,6 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       centerUIDiv.innerHTML = `
         <div style="color: ${timeColor}; font-size: ${isLowTime ? '20px' : '18px'}; ${isLowTime ? 'animation: pulse 0.5s infinite;' : ''}">⏱️ ${timeString}</div>
         <div style="font-size: 11px; margin-top: 8px; color: #aaa;">Defeated: <span style="color: #ff6600;">${timeAttackState.enemiesDefeated}</span></div>
-      `
-    } else if (roundState) {
-      centerUIDiv.style.display = 'block'
-      centerUIDiv.innerHTML = `
-        <div style="font-size: 14px;">ROUND ${roundState.currentRound}/${roundState.maxRounds}</div>
-        <div style="font-size: 11px; margin-top: 8px; display: flex; gap: 15px; justify-content: center;">
-          <span style="color: #ff4444;">You: ${roundState.playerWins}</span>
-          <span style="color: #cc44ff;">AI: ${roundState.enemyWins}</span>
-        </div>
       `
     } else {
       centerUIDiv.style.display = 'none'
@@ -1409,9 +1395,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         <div style="font-size: 12px; margin-bottom: 8px; color: ${settings.player2Color}; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px ${settings.player2Color}88;">Player 2</div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 18px;">❤️</span>
-          <span style="font-size: 14px; font-weight: bold;">${player2Lives}/3</span>
+          <span style="font-size: 14px; font-weight: bold;">${player2Lives}/4</span>
         </div>
-        ${healthBarHTML(player2Lives, 3, true)}
+        ${healthBarHTML(player2Lives, 4, true)}
         ${powerupIconsHTML(player2MaxBombs, player2BlastRadius, player2HasKick, player2HasThrow, player2Speed)}
       `
     } else {
