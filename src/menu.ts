@@ -74,7 +74,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
   
   // Subtitle
   const subtitle = document.createElement('p')
-  subtitle.textContent = 'By Fredrik Dokken'
+  subtitle.textContent = 'By Fredrik Dokken, V1.7'
   subtitle.style.fontSize = '16px'
   subtitle.style.color = '#aaa'
   subtitle.style.marginTop = '-30px'

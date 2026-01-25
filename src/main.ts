@@ -233,7 +233,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Negative Z moves camera target up, shifting the visible world down (showing more of top, less of bottom)
   // We want to shift the world UP on screen (so bottom row moves away from controls)
   // That means we need the camera to look at a point with NEGATIVE Z offset
-  const mobileVerticalOffset = (isMobile() && isLargeMap) ? -TILE_SIZE * 5.5 : 0
+  const mobileVerticalOffset = isMobile() 
+    ? (isLargeMap ? -TILE_SIZE * 5.5 : -TILE_SIZE * 2.5) 
+    : 0
   
   const camera = new ArcRotateCamera(
     'camera',
