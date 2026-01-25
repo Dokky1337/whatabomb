@@ -3,7 +3,7 @@ import { SoundManager } from './sound-manager'
 
 export function createSettingsMenu(
   settingsManager: SettingsManager,
-  _soundManager: SoundManager | null,
+  soundManager: SoundManager | null,
   onClose: () => void
 ): HTMLDivElement {
   const settingsDiv = document.createElement('div')
@@ -44,32 +44,26 @@ export function createSettingsMenu(
 
   const settings = settingsManager.getSettings()
 
-  // Music Volume (Disabled)
+  // Music Volume
   const musicSection = createSliderSetting(
-    'Music Volume (Coming Soon)',
+    '🎵 Music Volume',
     settings.musicVolume,
-    (_value) => {
-      // settingsManager.setMusicVolume(value)
-      // if (soundManager) soundManager.setMusicVolume(value)
+    (value) => {
+      settingsManager.setMusicVolume(value)
+      if (soundManager) soundManager.setMusicVolume(value)
     }
   )
-  // Disable music section visually
-  musicSection.style.opacity = '0.5'
-  musicSection.style.pointerEvents = 'none'
   settingsContainer.appendChild(musicSection)
 
-  // SFX Volume (Disabled)
+  // SFX Volume
   const sfxSection = createSliderSetting(
-    'Sound Effects (Coming Soon)',
+    '🔊 Sound Effects',
     settings.sfxVolume,
-    (_value) => {
-      // settingsManager.setSFXVolume(value)
-      // if (soundManager) soundManager.setSFXVolume(value)
+    (value) => {
+      settingsManager.setSFXVolume(value)
+      if (soundManager) soundManager.setSFXVolume(value)
     }
   )
-  // Disable SFX section visually
-  sfxSection.style.opacity = '0.5'
-  sfxSection.style.pointerEvents = 'none'
   settingsContainer.appendChild(sfxSection)
 
   // Screen Shake Toggle

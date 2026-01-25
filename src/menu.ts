@@ -7,7 +7,7 @@ export interface MenuOptions {
 }
 
 // Countdown before game starts
-export function showCountdown(onComplete: () => void): void {
+export function showCountdown(onComplete: () => void, onTick?: () => void): void {
   const overlay = document.createElement('div')
   overlay.className = 'countdown-overlay'
   overlay.id = 'countdown-overlay'
@@ -27,6 +27,8 @@ export function showCountdown(onComplete: () => void): void {
       countdownText.style.animation = 'none'
       countdownText.offsetHeight // Trigger reflow
       countdownText.style.animation = ''
+      // Play tick sound
+      if (onTick) onTick()
       count--
       setTimeout(updateCountdown, 1000)
     } else {
@@ -74,7 +76,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
   
   // Subtitle
   const subtitle = document.createElement('p')
-  subtitle.textContent = 'By Fredrik Dokken, V2.0'
+  subtitle.textContent = 'By Fredrik Dokken, V3.0'
   subtitle.style.fontSize = '16px'
   subtitle.style.color = '#aaa'
   subtitle.style.marginTop = '-30px'

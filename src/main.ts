@@ -103,6 +103,9 @@ interface Enemy {
   lives: number
   invulnerable: boolean
   invulnerableTimer: number
+  // Smooth movement visual position
+  visualX?: number
+  visualZ?: number
 }
 
 function createGrid(width: number, height: number, paddingBottom: number = 0): Grid {
@@ -198,16 +201,23 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   soundManager = new SoundManager(scene)
   soundManager.createPlaceholderSounds()
   
-  // Try to load sound files (will fail gracefully if not present)
+  // Load all sound effect files (WAV format)
   try {
-    soundManager.loadSound('bomb-place', '/sounds/bomb-place.mp3', { volume: 0.5 })
-    soundManager.loadSound('explosion', '/sounds/explosion.mp3', { volume: 0.6 })
-    soundManager.loadSound('powerup', '/sounds/powerup.mp3', { volume: 0.5 })
-    soundManager.loadSound('victory', '/sounds/victory.mp3', { volume: 0.7 })
-    soundManager.loadSound('defeat', '/sounds/defeat.mp3', { volume: 0.7 })
-    soundManager.loadSound('bgm', '/sounds/bgm.mp3', { loop: true, isMusic: true })
+    soundManager.loadSound('bomb-place', '/sounds/bomb-place.wav', { volume: 0.5 })
+    soundManager.loadSound('explosion', '/sounds/explosion.wav', { volume: 0.6 })
+    soundManager.loadSound('powerup', '/sounds/powerup.wav', { volume: 0.5 })
+    soundManager.loadSound('victory', '/sounds/victory.wav', { volume: 0.7 })
+    soundManager.loadSound('defeat', '/sounds/defeat.wav', { volume: 0.7 })
+    soundManager.loadSound('game-start', '/sounds/game-start.wav', { volume: 0.6 })
+    soundManager.loadSound('death', '/sounds/death.wav', { volume: 0.6 })
+    soundManager.loadSound('menu-select', '/sounds/menu-select.wav', { volume: 0.4 })
+    soundManager.loadSound('menu-click', '/sounds/menu-click.wav', { volume: 0.5 })
+    soundManager.loadSound('kick', '/sounds/kick.wav', { volume: 0.5 })
+    soundManager.loadSound('throw', '/sounds/throw.wav', { volume: 0.5 })
+    soundManager.loadSound('countdown-tick', '/sounds/countdown-tick.wav', { volume: 0.5 })
+    soundManager.loadSound('bgm', '/sounds/bgm.wav', { loop: true, isMusic: true })
   } catch (e) {
-    console.log('Sound files not found - add them to public/sounds/')
+    console.log('Sound files not found - run: node scripts/generate-sounds.js')
   }
   
   // Apply settings
@@ -231,8 +241,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   gameStateManager.reset()
   if (gameMode === 'time-attack') {
     gameStateManager.initTimeAttack(180000, 5000) // 3 minutes, 5 sec bonus per kill
-  } else if (gameMode !== 'pvp') {
-    gameStateManager.initRounds(3) // Best of 3
+  } else if (gameMode === 'pvp') {
+    gameStateManager.initRounds(2) // Best of 2 for PvP
+  } else if (gameMode !== 'survival') {
+    gameStateManager.initRounds(2) // Best of 2 for vs AI modes
   }
 
   // Camera: straight down for flat top-down view
@@ -939,6 +951,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   let playerSpeed = 1
   let moveDelay = 150 // milliseconds between moves
   let lastMoveTime = 0
+  
+  // Smooth movement - visual position interpolates towards grid position
+  let playerVisualX = playerPos.x
+  let playerVisualZ = playerPos.z
+  const MOVE_LERP_SPEED = 15 // Higher = faster interpolation
 
   // Determine number of enemies based on game mode
   const numEnemies = gameMode === '1v1' ? 1 : 
@@ -968,6 +985,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   for (let i = 0; i < numEnemies; i++) {
     const spawn = enemySpawns[i]
     const enemyMesh = createPlayerSprite(`enemy-${i}`, null, enemyEmojis[i % 3], enemyColors[i % 3])
+    const enemyPos = gridToWorld(spawn.x, spawn.y)
     const enemy: Enemy = {
       x: spawn.x,
       y: spawn.y,
@@ -976,8 +994,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       lives: difficultyConfig.enemyStartingLives,
       invulnerable: false,
       invulnerableTimer: 0,
+      visualX: enemyPos.x,
+      visualZ: enemyPos.z,
     }
-    const enemyPos = gridToWorld(enemy.x, enemy.y)
     enemy.mesh.position.x = enemyPos.x
     enemy.mesh.position.y = TILE_SIZE * 0.5
     enemy.mesh.position.z = enemyPos.z
@@ -987,7 +1006,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Player 2 for PvP mode
   let player2GridX = GRID_WIDTH - 2
   let player2GridY = GRID_HEIGHT - 2
-  let player2Lives = 3
+  let player2Lives = 4
   let player2Invulnerable = false
   let player2InvulnerableTimer = 0
   let player2MaxBombs = 1
@@ -1000,6 +1019,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   let lastPlayer2MoveTime = 0
   let lastPlayer2Dx = 0
   let lastPlayer2Dy = -1
+  
+  // Player 2 smooth movement
+  let player2VisualX = 0
+  let player2VisualZ = 0
 
   const player2Material = new StandardMaterial('player2Mat', scene)
   player2Material.diffuseColor = new Color3(0.1, 0.1, 0.9)
@@ -1012,6 +1035,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     player2.position.x = player2Pos.x
     player2.position.y = TILE_SIZE * 0.5
     player2.position.z = player2Pos.z
+    player2VisualX = player2Pos.x
+    player2VisualZ = player2Pos.z
   }
 
   // Game state
@@ -1730,13 +1755,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     }, 150)
   }
   
-  // Create a guaranteed white smoke texture
-  let smokeTexture: Texture | null = null
-  function getSmokeTexture(scene: Scene): Texture {
-    if (smokeTexture) return smokeTexture;
-    
+  // Create a white smoke texture for particle systems
+  function createSmokeTexture(): Texture {
     // Create soft transparent circle
-    const dynamicTexture = new DynamicTexture("smokeTexture", 64, scene, false);
+    const dynamicTexture = new DynamicTexture("smokeTexture-" + Date.now(), 64, scene, false);
     const ctx = dynamicTexture.getContext();
     const size = dynamicTexture.getSize();
     const mid = size.width / 2;
@@ -1753,8 +1775,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     ctx.fillRect(0, 0, size.width, size.height);
     
     dynamicTexture.update();
-    smokeTexture = dynamicTexture;
-    return smokeTexture;
+    return dynamicTexture;
   }
   
   // Create smoke particles for after explosion
@@ -1766,7 +1787,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     emitter.isVisible = false
     smokeSystem.emitter = emitter
     
-    smokeSystem.particleTexture = getSmokeTexture(scene);
+    // Create a new texture for this smoke system (avoid sharing issues)
+    const smokeTexture = createSmokeTexture()
+    smokeSystem.particleTexture = smokeTexture
 
     smokeSystem.color1 = new Color4(0.9, 0.9, 0.9, 0.8) // White-ish, high opacity
     smokeSystem.color2 = new Color4(0.7, 0.7, 0.7, 0.6) // Light Gray
@@ -1794,6 +1817,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       smokeSystem.stop()
       setTimeout(() => {
         smokeSystem.dispose()
+        smokeTexture.dispose()
         emitter.dispose()
       }, 2000)
     }, 300)
@@ -1991,6 +2015,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         playerInvulnerableTimer = 2000 // 2 seconds invulnerability
         sessionDamageTaken++
         
+        // Play death/hit sound
+        if (soundManager) soundManager.playSFX('death')
+        
         // Show hit indicator
         const playerPos = gridToWorld(playerGridX, playerGridY)
         showHitIndicator(playerPos, scene, true)
@@ -2145,6 +2172,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         player2Lives--
         player2Invulnerable = true
         player2InvulnerableTimer = 2000
+        
+        // Play death/hit sound
+        if (soundManager) soundManager.playSFX('death')
         
         // Show hit indicator
         const player2Pos = gridToWorld(player2GridX, player2GridY)
@@ -2643,6 +2673,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       bombAtTarget.x += dx * kickDistance
       bombAtTarget.y += dy * kickDistance
       
+      // Play kick sound
+      if (soundManager) soundManager.playSFX('kick')
+      
       // Animate the bomb movement
       const targetPos = gridToWorld(bombAtTarget.x, bombAtTarget.y)
       const moveAnim = new Animation('moveAnim', 'position', 30, Animation.ANIMATIONTYPE_VECTOR3)
@@ -2702,6 +2735,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     if (finalX !== playerGridX || finalY !== playerGridY) {
       bombAtPlayer.x = finalX
       bombAtPlayer.y = finalY
+      
+      // Play throw sound
+      if (soundManager) soundManager.playSFX('throw')
       
       // Animate the bomb movement (faster than kick)
       const targetPos = gridToWorld(bombAtPlayer.x, bombAtPlayer.y)
@@ -2983,10 +3019,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
     playerGridX = targetX
     playerGridY = targetY
-    const newPos = gridToWorld(playerGridX, playerGridY)
-    player.position.x = newPos.x
-    player.position.y = TILE_SIZE * 0.5
-    player.position.z = newPos.z
+    // Don't instantly set position - let the smooth interpolation handle it
+    // const newPos = gridToWorld(playerGridX, playerGridY)
+    // player.position.x = newPos.x
+    // player.position.z = newPos.z
     lastMoveTime = currentTime
     
     if (player.playAnimation) {
@@ -3024,10 +3060,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
     player2GridX = targetX
     player2GridY = targetY
-    const newPos2 = gridToWorld(player2GridX, player2GridY)
-    player2.position.x = newPos2.x
-    player2.position.y = TILE_SIZE * 0.5
-    player2.position.z = newPos2.z
+    // Don't instantly set position - let the smooth interpolation handle it
+    // const newPos2 = gridToWorld(player2GridX, player2GridY)
+    // player2.position.x = newPos2.x
+    // player2.position.z = newPos2.z
     lastPlayer2MoveTime = currentTime
     
     checkPowerUps()
@@ -3285,6 +3321,34 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       // Process held keys for smooth continuous movement
       processHeldKeys()
       
+      // Smooth movement interpolation for player 1
+      const targetPos1 = gridToWorld(playerGridX, playerGridY)
+      const lerpFactor = Math.min(1, MOVE_LERP_SPEED * deltaTime / 1000)
+      playerVisualX += (targetPos1.x - playerVisualX) * lerpFactor
+      playerVisualZ += (targetPos1.z - playerVisualZ) * lerpFactor
+      player.position.x = playerVisualX
+      player.position.z = playerVisualZ
+      
+      // Smooth movement interpolation for player 2 (PvP mode)
+      if (gameMode === 'pvp' && player2) {
+        const targetPos2 = gridToWorld(player2GridX, player2GridY)
+        player2VisualX += (targetPos2.x - player2VisualX) * lerpFactor
+        player2VisualZ += (targetPos2.z - player2VisualZ) * lerpFactor
+        player2.position.x = player2VisualX
+        player2.position.z = player2VisualZ
+      }
+      
+      // Smooth movement interpolation for enemies
+      enemies.forEach(enemy => {
+        if (enemy.lives > 0 && enemy.visualX !== undefined && enemy.visualZ !== undefined) {
+          const targetEnemyPos = gridToWorld(enemy.x, enemy.y)
+          enemy.visualX += (targetEnemyPos.x - enemy.visualX) * lerpFactor
+          enemy.visualZ += (targetEnemyPos.z - enemy.visualZ) * lerpFactor
+          enemy.mesh.position.x = enemy.visualX
+          enemy.mesh.position.z = enemy.visualZ
+        }
+      })
+      
       // Camera follow logic for mobile
       if (isMobile()) {
         const targetX = player.position.x
@@ -3398,6 +3462,9 @@ function startGame(mode: GameMode) {
       soundManager.playSFX('game-start')
       soundManager.playMusic('bgm')
     }
+  }, () => {
+    // Play tick sound for each countdown number
+    if (soundManager) soundManager.playSFX('countdown-tick')
   })
 }
 
@@ -3497,6 +3564,22 @@ const mapSelectionScreen = createMapSelectionScreen(
   }
 )
 document.body.appendChild(mapSelectionScreen)
+
+// Add global menu sound effects
+// This plays sounds for any menu button interactions
+document.addEventListener('mouseenter', (e) => {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'BUTTON' && (target.closest('.menu-container') || target.closest('#main-menu'))) {
+    if (soundManager) soundManager.playSFX('menu-select')
+  }
+}, true)
+
+document.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'BUTTON' && (target.closest('.menu-container') || target.closest('#main-menu'))) {
+    if (soundManager) soundManager.playSFX('menu-click')
+  }
+}, true)
 
 // Add event listeners for all menu buttons
 setTimeout(() => {

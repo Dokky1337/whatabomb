@@ -2,6 +2,7 @@ import { Scene, Sound, Engine } from '@babylonjs/core'
 
 export class SoundManager {
   private sounds: Map<string, Sound> = new Map()
+  private musicSounds: Set<string> = new Set() // Track which sounds are music
   private scene: Scene
   private musicVolume: number = 0.5
   private sfxVolume: number = 0.7
@@ -24,15 +25,26 @@ export class SoundManager {
 
   // Load a sound
   loadSound(name: string, url: string, options: any = {}) {
+    const isMusic = options.isMusic || false
+    const volume = isMusic ? this.musicVolume : this.sfxVolume
+    
+    // Track music sounds
+    if (isMusic) {
+      this.musicSounds.add(name)
+    }
+    
     const sound = new Sound(
       name,
       url,
       this.scene,
-      null,
+      () => {
+        // Callback when sound is loaded - ensure volume is set correctly
+        sound.setVolume(isMusic ? this.musicVolume : this.sfxVolume)
+      },
       {
         loop: options.loop || false,
         autoplay: false,
-        volume: options.isMusic ? this.musicVolume : this.sfxVolume,
+        volume: volume,
         ...options
       }
     )
@@ -57,7 +69,26 @@ export class SoundManager {
     const music = this.sounds.get(name)
     if (music) {
       this.currentMusic = music
-      music.play()
+      // Ensure volume is set before playing
+      music.setVolume(this.musicVolume)
+      
+      // Check if sound is ready, if not wait for it
+      if (music.isReady()) {
+        music.play()
+      } else {
+        // Sound not ready yet, wait for it to be ready
+        const checkReady = setInterval(() => {
+          if (music.isReady()) {
+            clearInterval(checkReady)
+            music.setVolume(this.musicVolume)
+            music.play()
+          }
+        }, 100)
+        // Timeout after 5 seconds
+        setTimeout(() => clearInterval(checkReady), 5000)
+      }
+    } else {
+      console.warn(`Music sound '${name}' not found`)
     }
   }
 
@@ -71,6 +102,14 @@ export class SoundManager {
   // Set volumes
   setMusicVolume(volume: number) {
     this.musicVolume = Math.max(0, Math.min(1, volume))
+    // Apply to all music sounds
+    this.musicSounds.forEach(name => {
+      const sound = this.sounds.get(name)
+      if (sound) {
+        sound.setVolume(this.musicVolume)
+      }
+    })
+    // Also apply to current music if it's playing
     if (this.currentMusic) {
       this.currentMusic.setVolume(this.musicVolume)
     }
@@ -78,8 +117,8 @@ export class SoundManager {
 
   setSFXVolume(volume: number) {
     this.sfxVolume = Math.max(0, Math.min(1, volume))
-    this.sounds.forEach((sound) => {
-      if (sound !== this.currentMusic) {
+    this.sounds.forEach((sound, name) => {
+      if (!this.musicSounds.has(name)) {
         sound.setVolume(this.sfxVolume)
       }
     })
