@@ -105,11 +105,22 @@ interface Enemy {
   invulnerableTimer: number
 }
 
-function createGrid(width: number, height: number): Grid {
+function createGrid(width: number, height: number, paddingBottom: number = 0): Grid {
   const grid: Grid = []
+  const totalHeight = height + paddingBottom
 
-  for (let y = 0; y < height; y++) {
+  for (let y = 0; y < totalHeight; y++) {
     const row: TileType[] = []
+    
+    // If we're in the padding area (bottom of map on mobile), just leave empty
+    if (y >= height) {
+      for (let x = 0; x < width; x++) {
+        row.push('empty')
+      }
+      grid.push(row)
+      continue
+    }
+
     for (let x = 0; x < width; x++) {
       const isBorder = x === 0 || y === 0 || x === width - 1 || y === height - 1
       const isInnerPillar = x % 2 === 0 && y % 2 === 0
@@ -233,9 +244,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Negative Z moves camera target up, shifting the visible world down (showing more of top, less of bottom)
   // We want to shift the world UP on screen (so bottom row moves away from controls)
   // That means we need the camera to look at a point with NEGATIVE Z offset
-  const mobileVerticalOffset = isMobile() 
-    ? (isLargeMap ? -TILE_SIZE * 5.5 : -TILE_SIZE * 2.5) 
-    : 0
+  // (Disabled since we use padding now)
+  const mobileVerticalOffset = 0
   
   const camera = new ArcRotateCamera(
     'camera',
@@ -272,17 +282,17 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Apply zoom by modifying the boundaries
   // Note: changing halfWorldWidth effectively changes the viewing frustum size
   
-  // Calculate viewport dimensions in world units
+  // Calculate viewport dimensions in world units (based on playable area)
   const viewportHalfWidth = (halfWorldWidth + margin) * zoomFactor
   const viewportHalfHeight = (halfWorldHeight + margin) * zoomFactor
   
+  // Add padding to the camera bottom view
+  const bottomPaddingWorld = isMobile() ? (4 * TILE_SIZE) * zoomFactor : 0
+
   camera.orthoLeft = -viewportHalfWidth
   camera.orthoRight = viewportHalfWidth
-  // For mobile, we center the view vertically differently initially due to controls,
-  // but if we follow the player, we might want to center on player.
-  // However, the controls are still at the bottom.
-  // If we follow player, we should probably keep the player centered or slightly offset.
-  camera.orthoBottom = -viewportHalfHeight - (isMobile() ? bottomMarginMobile * zoomFactor : 0)
+  // Extend bottom to include controls area without shrinking the game
+  camera.orthoBottom = -viewportHalfHeight - (isMobile() ? bottomMarginMobile * zoomFactor : 0) - bottomPaddingWorld
   camera.orthoTop = viewportHalfHeight
 
   // Fix the camera so the player can't rotate/zoom
@@ -389,7 +399,12 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   enemyMaterial.specularColor = new Color3(0, 0, 0)
 
   // Create map geometry
-  const grid = createGrid(GRID_WIDTH, GRID_HEIGHT)
+  const paddingBottom = isMobile() ? 4 : 0
+  const grid = createGrid(GRID_WIDTH, GRID_HEIGHT, paddingBottom)
+  
+  // Note: We do NOT update global GRID_HEIGHT here so game logic (spawns/borders) 
+  // stays within playable area. Visuals will handle the extra rows.
+  
   const destructibleMeshes: Map<string, any> = new Map()
 
   // Helper to create a procedural texture
@@ -555,7 +570,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   const floorTexture = createFloorTexture(currentMapConfig.theme)
 
   // Create floor tiles individually for better grid visibility
-  for (let y = 0; y < GRID_HEIGHT; y++) {
+  // Use grid.length to include padding rows
+  for (let y = 0; y < grid.length; y++) {
     for (let x = 0; x < GRID_WIDTH; x++) {
       const isCheckered = (x + y) % 2 === 0
       const tile = MeshBuilder.CreateGround(`tile-${x}-${y}`, {
@@ -1050,16 +1066,6 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       opponentUIDiv.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(20,20,40,0.55) 100%)'
     })
   }
-  document.body.appendChild(opponentUIDiv)
-  opponentUIDiv.style.fontFamily = "'Russo One', sans-serif"
-  opponentUIDiv.style.fontSize = '16px'
-  opponentUIDiv.style.zIndex = '1000'
-  opponentUIDiv.style.minWidth = '180px'
-  opponentUIDiv.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(20,20,40,0.9) 100%)'
-  opponentUIDiv.style.border = '2px solid rgba(204,68,255,0.3)'
-  opponentUIDiv.style.borderRadius = '12px'
-  opponentUIDiv.style.padding = '12px'
-  opponentUIDiv.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)'
   document.body.appendChild(opponentUIDiv)
 
   // Create mobile controls if on mobile
