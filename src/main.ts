@@ -1897,14 +1897,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   playerUIDiv.className = 'game-ui-panel'
   playerUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-    // Center above the d-pad and bomb button so it doesn't overlap controls
-    playerUIDiv.style.top = 'auto'
-    playerUIDiv.style.bottom = 'calc(260px + env(safe-area-inset-bottom, 0px))'
-    playerUIDiv.style.left = '50%'
+    // Flush to top-left as a tiny floating badge — out of the way
+    playerUIDiv.style.top = 'calc(4px + env(safe-area-inset-top, 0px))'
+    playerUIDiv.style.bottom = 'auto'
+    playerUIDiv.style.left = 'calc(4px + env(safe-area-inset-left, 0px))'
     
-    // Scale down and center horizontally
-    playerUIDiv.style.transform = 'translateX(-50%) scale(0.7)'
-    playerUIDiv.style.transformOrigin = 'center bottom'
+    // Small scale so it barely covers the map
+    playerUIDiv.style.transform = 'scale(0.55)'
+    playerUIDiv.style.transformOrigin = 'top left'
   } else {
     // PC: Centered at bottom with transparency
     playerUIDiv.style.bottom = '15px'
@@ -1917,13 +1917,13 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   playerUIDiv.style.zIndex = '1000'
   playerUIDiv.style.minWidth = isMobileDevice ? '180px' : '160px'
   playerUIDiv.style.background = isMobileDevice 
-    ? 'linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(20,20,40,0.9) 100%)'
+    ? 'linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(20,20,40,0.55) 100%)'
     : 'linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(20,20,40,0.55) 100%)'
   playerUIDiv.style.border = '2px solid rgba(255,68,68,0.3)'
   playerUIDiv.style.borderRadius = '12px'
-  playerUIDiv.style.padding = isMobileDevice ? '12px' : '8px 10px'
+  playerUIDiv.style.padding = isMobileDevice ? '6px 10px' : '8px 10px'
   playerUIDiv.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)'
-  playerUIDiv.style.opacity = isMobileDevice ? '1' : '0.85'
+  playerUIDiv.style.opacity = isMobileDevice ? '0.65' : '0.85'
   playerUIDiv.style.transition = 'opacity 0.2s ease'
   
   // PC: Make more visible on hover
