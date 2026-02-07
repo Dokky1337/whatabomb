@@ -55,8 +55,8 @@ export function createTutorialScreen(onClose: () => void): HTMLDivElement {
         'Chain reactions occur when bombs hit other bombs',
         'You have 3 lives - avoid explosions and enemies!',
         'Invulnerability lasts 2 seconds after taking damage',
-        'Want to play fullscreen on iOS? Add locally with Share - Add to Homescreen',
         'This game supports PWAs!',
+        'Want to play fullscreen on iOS? Add locally with Share - Add to Homescreen',
       ]
     },
     {
