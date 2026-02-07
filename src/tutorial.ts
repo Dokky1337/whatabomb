@@ -53,7 +53,7 @@ export function createTutorialScreen(onClose: () => void): HTMLDivElement {
         'Place bombs to destroy blocks and defeat enemies',
         'Bombs explode after 2 seconds in a cross pattern',
         'Chain reactions occur when bombs hit other bombs',
-        'You have 3 lives - avoid explosions and enemies!',
+        'You have 4 lives - avoid explosions and enemies!',
         'Invulnerability lasts 2 seconds after taking damage',
         'This game supports PWAs!',
         'Want to play fullscreen on iOS? Add locally with Share - Add to Homescreen',
