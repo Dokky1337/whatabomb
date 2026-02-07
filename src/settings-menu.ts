@@ -1,5 +1,6 @@
 import { SettingsManager, PLAYER_COLORS, CHARACTER_SHAPES } from './settings'
 import { SoundManager } from './sound-manager'
+import { setHapticsEnabled } from './device'
 
 export function createSettingsMenu(
   settingsManager: SettingsManager,
@@ -87,6 +88,17 @@ export function createSettingsMenu(
     }
   )
   settingsContainer.appendChild(particlesSection)
+
+  // Haptic Feedback Toggle
+  const hapticsSection = createToggleSetting(
+    '📳 Haptic Feedback',
+    settings.haptics,
+    (value) => {
+      settingsManager.setHaptics(value)
+      setHapticsEnabled(value)
+    }
+  )
+  settingsContainer.appendChild(hapticsSection)
 
   // Extended Power-Ups Toggle
   const extendedPowerUpsSection = createToggleSetting(

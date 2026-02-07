@@ -3,6 +3,7 @@ export interface GameSettings {
   sfxVolume: number
   screenShake: boolean
   particles: boolean
+  haptics: boolean
   difficulty: 'easy' | 'medium' | 'hard'
   player1Color: string
   player2Color: string
@@ -46,6 +47,7 @@ export class SettingsManager {
           sfxVolume: parsed.sfxVolume ?? 0.7,
           screenShake: parsed.screenShake ?? true,
           particles: parsed.particles ?? true,
+          haptics: parsed.haptics ?? true,
           difficulty: parsed.difficulty ?? 'medium',
           player1Color: parsed.player1Color ?? '#4ade80',
           player2Color: parsed.player2Color ?? '#60a5fa',
@@ -62,6 +64,7 @@ export class SettingsManager {
       sfxVolume: 0.7,
       screenShake: true,
       particles: true,
+      haptics: true,
       difficulty: 'medium',
       player1Color: '#4ade80',
       player2Color: '#60a5fa',
@@ -120,6 +123,11 @@ export class SettingsManager {
 
   setExtendedPowerUps(enabled: boolean) {
     this.settings.extendedPowerUps = enabled
+    this.saveSettings()
+  }
+
+  setHaptics(enabled: boolean) {
+    this.settings.haptics = enabled
     this.saveSettings()
   }
 }

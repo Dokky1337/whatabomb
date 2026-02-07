@@ -1,6 +1,6 @@
 import { FLARE_TEXTURE_DATA_URI } from './assets'
 import './style.css'
-import { isMobile, haptic } from './device'
+import { isMobile, haptic, setHapticsEnabled } from './device'
 import {
   ArcRotateCamera,
   Camera,
@@ -59,6 +59,7 @@ let isPaused = false
 // Global managers
 const statsManager = new StatisticsManager()
 const settingsManager = new SettingsManager()
+setHapticsEnabled(settingsManager.getSettings().haptics)
 const gameStateManager = new GameStateManager()
 const achievementsManager = new AchievementsManager()
 let soundManager: SoundManager | null = null
@@ -1896,14 +1897,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   playerUIDiv.className = 'game-ui-panel'
   playerUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-    // Center at same height as d-pad and bomb button
+    // Center above the d-pad and bomb button so it doesn't overlap controls
     playerUIDiv.style.top = 'auto'
-    playerUIDiv.style.bottom = 'calc(120px + env(safe-area-inset-bottom, 0px))'
+    playerUIDiv.style.bottom = 'calc(260px + env(safe-area-inset-bottom, 0px))'
     playerUIDiv.style.left = '50%'
     
-    // Scale down and center vertically within controls area
+    // Scale down and center horizontally
     playerUIDiv.style.transform = 'translateX(-50%) scale(0.7)'
-    playerUIDiv.style.transformOrigin = 'center center'
+    playerUIDiv.style.transformOrigin = 'center bottom'
   } else {
     // PC: Centered at bottom with transparency
     playerUIDiv.style.bottom = '15px'

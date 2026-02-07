@@ -479,18 +479,18 @@ body {
   /* Lowered to not cover game area */
   bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   left: calc(20px + env(safe-area-inset-left, 0px));
-  width: 190px;
-  height: 190px;
+  width: 170px;
+  height: 170px;
   pointer-events: auto;
 }
 
 .dpad-btn {
   position: absolute;
-  width: 60px;
-  height: 60px;
+  width: 52px;
+  height: 52px;
   background: rgba(255, 255, 255, 0.18);
   border: 2px solid rgba(255, 255, 255, 0.35);
-  border-radius: 14px;
+  border-radius: 12px;
   backdrop-filter: blur(2px);
   touch-action: none;
   transition: background 0.08s;
@@ -502,18 +502,18 @@ body {
   transform: scale(0.93);
 }
 
-.dpad-up { top: 0; left: 65px; }
-.dpad-down { bottom: 0; left: 65px; }
-.dpad-left { top: 65px; left: 0; }
-.dpad-right { top: 65px; right: 0; }
+.dpad-up { top: 0; left: 59px; }
+.dpad-down { bottom: 0; left: 59px; }
+.dpad-left { top: 59px; left: 0; }
+.dpad-right { top: 59px; right: 0; }
 
 /* Arrows on dpad buttons */
 /* The user requested moving arrows up slightly. padding-bottom pushes grid content up. */
 /* Increased padding to move icon further up (visually) inside the button */
-.dpad-up::after { content: "▲"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 18px; }
-.dpad-down::after { content: "▼"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 18px; }
-.dpad-left::after { content: "◀"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 18px; }
-.dpad-right::after { content: "▶"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 18px; }
+.dpad-up::after { content: "▲"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 16px; }
+.dpad-down::after { content: "▼"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 16px; }
+.dpad-left::after { content: "◀"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 16px; }
+.dpad-right::after { content: "▶"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 16px; }
 
 .offscreen-indicator {
   position: absolute;
@@ -551,8 +551,8 @@ body {
 }
 
 .action-btn {
-  width: 100px;
-  height: 100px;
+  width: 85px;
+  height: 85px;
   background: rgba(255, 60, 60, 0.3);
   border: 3px solid rgba(255, 100, 100, 0.5);
   border-radius: 50%;
@@ -563,7 +563,7 @@ body {
   align-items: center;
   justify-content: center;
   font-family: 'Russo One', sans-serif;
-  font-size: 17px;
+  font-size: 15px;
   color: rgba(255,255,255,0.9);
   text-shadow: 1px 1px 2px black;
   transition: transform 0.08s, background 0.08s;
