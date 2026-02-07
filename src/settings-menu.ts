@@ -3,7 +3,7 @@ import { SoundManager } from './sound-manager'
 
 export function createSettingsMenu(
   settingsManager: SettingsManager,
-  soundManager: SoundManager | null,
+  getSoundManager: () => SoundManager | null,
   onClose: () => void
 ): HTMLDivElement {
   const settingsDiv = document.createElement('div')
@@ -50,7 +50,8 @@ export function createSettingsMenu(
     settings.musicVolume,
     (value) => {
       settingsManager.setMusicVolume(value)
-      if (soundManager) soundManager.setMusicVolume(value)
+      const sm = getSoundManager()
+      if (sm) sm.setMusicVolume(value)
     }
   )
   settingsContainer.appendChild(musicSection)
@@ -61,7 +62,8 @@ export function createSettingsMenu(
     settings.sfxVolume,
     (value) => {
       settingsManager.setSFXVolume(value)
-      if (soundManager) soundManager.setSFXVolume(value)
+      const sm = getSoundManager()
+      if (sm) sm.setSFXVolume(value)
     }
   )
   settingsContainer.appendChild(sfxSection)

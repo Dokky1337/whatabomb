@@ -187,44 +187,6 @@ export function findEscapeDirection(
 }
 
 /**
- * Get a safe move direction for normal movement (not in danger)
- * Returns null if no safe moves exist
- */
-export function getSafeMove(
-  x: number,
-  y: number,
-  grid: Grid,
-  gridWidth: number,
-  gridHeight: number,
-  bombs: Array<{ x: number; y: number; blastRadius: number }>,
-  preferredDx?: number,
-  preferredDy?: number
-): { dx: number, dy: number } | null {
-  const safeMoves: Array<{ dx: number, dy: number }> = []
-  
-  for (const dir of DIRECTIONS) {
-    const nx = x + dir.dx
-    const ny = y + dir.dy
-    
-    if (!canWalkTo(nx, ny, grid, gridWidth, gridHeight, bombs)) continue
-    if (!isPositionSafe(nx, ny, grid, bombs)) continue
-    
-    safeMoves.push(dir)
-  }
-  
-  if (safeMoves.length === 0) return null
-  
-  // If we have a preferred direction, try to use it
-  if (preferredDx !== undefined && preferredDy !== undefined) {
-    const preferred = safeMoves.find(m => m.dx === preferredDx && m.dy === preferredDy)
-    if (preferred) return preferred
-  }
-  
-  // Return random safe move
-  return safeMoves[Math.floor(Math.random() * safeMoves.length)]
-}
-
-/**
  * MAIN AI DECISION: Should the AI place a bomb?
  * Returns decision with escape direction if bomb should be placed
  */
@@ -336,13 +298,4 @@ export function getEscapeDirection(
   bombs: Array<{ x: number; y: number; blastRadius: number }>
 ): { dx: number, dy: number } | null {
   return findEscapeDirection(x, y, grid, gridWidth, gridHeight, bombs)
-}
-
-export function isPositionDangerousFromBombs(
-  x: number,
-  y: number,
-  bombs: Array<{ x: number; y: number; blastRadius: number }>,
-  grid: Grid
-): boolean {
-  return !isPositionSafe(x, y, grid, bombs)
 }

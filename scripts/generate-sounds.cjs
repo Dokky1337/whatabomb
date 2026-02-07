@@ -339,7 +339,7 @@ function walk() {
 // ─── Background Music Generator ─────────────────────────────────────────────
 
 function generateBGM() {
-  const bpm = 140
+  const bpm = 80 // Calmer tempo
   const beatLen = 60 / bpm
   const bars = 16
   const beatsPerBar = 4
@@ -363,7 +363,7 @@ function generateBGM() {
     220, 220, 220, 220,   165, 165, 165, 165,
   ]
 
-  // Melody pattern (quarter notes) - frequencies or 0 for rest
+  // Melody pattern (quarter notes)
   const melodyNotes = [
     // Bars 1-4: Simple motif
     440, 0, 523, 0,   494, 440, 0, 392,
@@ -379,104 +379,92 @@ function generateBGM() {
     440, 0, 0, 523,   440, 0, 0, 0,
   ]
 
-  // Drum pattern (per beat):  K=kick, S=snare, H=hihat 
-  // 0=nothing, 1=kick, 2=snare, 4=hihat, combinations by addition
+  // Simplified calming drum pattern
   const drumPattern = [
-    5, 4, 6, 4,  5, 4, 6, 4,  // K+H, H, S+H, H repeated
-    5, 4, 6, 4,  5, 4, 6, 5,
-    5, 4, 6, 4,  5, 4, 6, 4,
-    5, 4, 6, 4,  5, 4, 6, 5,
-    5, 4, 6, 4,  5, 4, 6, 4,
-    5, 4, 6, 4,  5, 4, 6, 5,
-    5, 4, 6, 4,  5, 4, 6, 4,
-    5, 4, 6, 4,  5, 6, 6, 5,  // fill at end
+    1, 0, 4, 0,  0, 0, 4, 0,
+    1, 0, 4, 0,  0, 0, 4, 0,
+    1, 0, 4, 0,  0, 0, 4, 0,
+    1, 0, 4, 0,  0, 0, 4, 0,
+    1, 0, 4, 0,  0, 0, 4, 0,
+    1, 0, 4, 0,  0, 0, 4, 0,
+    1, 0, 4, 0,  0, 0, 4, 0,
+    1, 0, 4, 0,  0, 0, 4, 0,
   ]
 
   const totalSamples = Math.floor(dur * SAMPLE_RATE)
 
-  // Bass track: punchy square bass
+  // Bass track: warm sine
   const bass = generate(dur, t => {
     const beatIdx = Math.floor(t / beatLen) % totalBeats
     const freq = bassNotes[beatIdx] || 220
     const localT = t % beatLen
-    const env = adsr(localT, 0.005, 0.05, 0.7, 0.05, beatLen)
-    return square(freq, t, 0.35) * env * 0.25
+    const env = adsr(localT, 0.1, 0.3, 0.6, 0.2, beatLen)
+    return sin(freq, t) * env * 0.4
   })
 
-  // Melody track: pulse wave with vibrato
+  // Melody track: glockenspiel/bell like sine
   const melody = generate(dur, t => {
     const beatIdx = Math.floor(t / beatLen) % totalBeats
     const freq = melodyNotes[beatIdx]
     if (!freq) return 0
     const localT = t % beatLen
-    const env = adsr(localT, 0.01, 0.08, 0.6, 0.1, beatLen * 0.9)
-    const vib = 1 + 0.003 * sin(5, t)
-    return (square(freq * vib, t, 0.25) * 0.3 + sin(freq * vib, t) * 0.2) * env
+    const env = adsr(localT, 0.01, 0.1, 0.1, 0.8, beatLen * 0.9)
+    return sin(freq, t) * env * 0.4
   })
 
-  // Arpeggio track: fast arpeggiated chords
+  // Arpeggio track: slow rolling sine
   const arp = generate(dur, t => {
     const beatIdx = Math.floor(t / beatLen) % totalBeats
     const barIdx = Math.floor(beatIdx / beatsPerBar)
     const bassFreq = bassNotes[barIdx * beatsPerBar] || 220
-    // Arpeggio: root, minor3rd, 5th, octave
-    const arpNotes = [bassFreq * 2, bassFreq * 2.4, bassFreq * 3, bassFreq * 4]
-    const arpSpeed = beatLen / 4
+    const arpNotes = [bassFreq * 2, bassFreq * 3]
+    const arpSpeed = beatLen / 2
     const arpIdx = Math.floor((t % beatLen) / arpSpeed) % arpNotes.length
     const localT = t % arpSpeed
-    const env = adsr(localT, 0.003, 0.02, 0.4, 0.02, arpSpeed * 0.8)
-    return sin(arpNotes[arpIdx], t) * env * 0.12
+    const env = adsr(localT, 0.1, 0.4, 0.2, 0.2, arpSpeed)
+    return sin(arpNotes[arpIdx], t) * env * 0.2
   })
 
-  // Drum track
+  // Drum track - just soft ticks/shakers
   const drums = generate(dur, t => {
     const beatIdx = Math.floor(t / beatLen) % totalBeats
     const pattern = drumPattern[beatIdx] || 0
     const localT = t % beatLen
     let out = 0
 
-    // Kick drum
+    // Soft Kick
     if (pattern & 1) {
-      const kickFreq = 150 * Math.exp(-localT * 25)
-      out += sin(kickFreq, localT) * decay(localT, 12) * 0.5
-      out += noise() * decay(localT, 40) * 0.1
+      const kickFreq = 80 * Math.exp(-localT * 10)
+      out += sin(kickFreq, localT) * decay(localT, 10) * 0.3
     }
 
-    // Snare
-    if (pattern & 2) {
-      out += noise() * decay(localT, 15) * 0.3
-      out += sin(200, localT) * decay(localT, 20) * 0.15
-    }
-
-    // Hi-hat
+    // Soft Hi-hat
     if (pattern & 4) {
-      out += noise() * decay(localT, 35) * 0.15
+      out += noise() * decay(localT, 30) * 0.05
     }
 
     return out
   })
 
-  // Sub bass for extra punch
-  const subBass = generate(dur, t => {
-    const beatIdx = Math.floor(t / beatLen) % totalBeats
-    const freq = bassNotes[beatIdx] / 2 || 110
-    const localT = t % beatLen
-    const env = adsr(localT, 0.01, 0.1, 0.5, 0.05, beatLen)
-    return sin(freq, t) * env * 0.15
+  // Pad - atmospheric
+  const pad = generate(dur, t => {
+      const beatIdx = Math.floor(t / beatLen) % totalBeats
+      const barIdx = Math.floor(beatIdx / beatsPerBar)
+      const freq = (bassNotes[barIdx * beatsPerBar] || 220)
+      return (sin(freq, t) + sin(freq * 1.5, t) * 0.5) * 0.1
   })
 
   let result = mix(
-    gain(lpFilter(bass, 800), 1.0),
-    gain(melody, 0.8),
-    gain(arp, 0.7),
+    bass,
+    melody,
+    arp,
     drums,
-    gain(lpFilter(subBass, 200), 1.0)
+    pad
   )
 
   // Master processing
-  result = softClip(result, 1.3)
-  result = reverb(result, 50, 0.15, 0.15)
-  return normalize(result, 0.85)
+  result = reverb(result, 150, 0.4, 0.3)
+  return normalize(result, 0.75)
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────

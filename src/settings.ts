@@ -42,7 +42,7 @@ export class SettingsManager {
         const parsed = JSON.parse(saved)
         // Ensure new properties have defaults
         return {
-          musicVolume: parsed.musicVolume ?? 0.5,
+          musicVolume: parsed.musicVolume ?? 0.05,
           sfxVolume: parsed.sfxVolume ?? 0.7,
           screenShake: parsed.screenShake ?? true,
           particles: parsed.particles ?? true,
@@ -58,7 +58,7 @@ export class SettingsManager {
     }
     
     return {
-      musicVolume: 0.5,
+      musicVolume: 0.05,
       sfxVolume: 0.7,
       screenShake: true,
       particles: true,

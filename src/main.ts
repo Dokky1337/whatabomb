@@ -301,7 +301,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   GRID_HEIGHT = currentMapConfig.gridHeight
   
   // Initialize sound manager
-  soundManager = new SoundManager(scene)
+  soundManager = new SoundManager()
   soundManager.createPlaceholderSounds()
   
   // Load all sound effect files (WAV format)
@@ -1623,37 +1623,37 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       }
 
       if (isMoving) {
-        animTime += dt * 0.014 // speed factor
+        animTime += dt * 0.004 // speed factor
 
-        const walkCycle = animTime * 6 // ~6 rad/s for a brisk walk
+        const walkCycle = animTime * 5 // ~5 rad/s for a brisk walk
 
         // ── Arms swing opposite ──
-        const armSwing = Math.sin(walkCycle) * 0.45
+        const armSwing = Math.sin(walkCycle) * 0.25
         armParts[0].upper.rotation.x = armSwing
         armParts[1].upper.rotation.x = -armSwing
         // Forearms bend when swinging back
-        armParts[0].lower.rotation.x = Math.max(0, -armSwing) * 0.6
-        armParts[1].lower.rotation.x = Math.max(0, armSwing) * 0.6
+        armParts[0].lower.rotation.x = Math.max(0, -armSwing) * 0.35
+        armParts[1].lower.rotation.x = Math.max(0, armSwing) * 0.35
 
         // ── Legs swing opposite ──
-        const legSwing = Math.sin(walkCycle) * 0.4
+        const legSwing = Math.sin(walkCycle) * 0.28
         legParts[0].thigh.rotation.x = -legSwing
         legParts[1].thigh.rotation.x = legSwing
         // Knees bend on back-swing
-        legParts[0].shin.rotation.x = Math.max(0, legSwing) * 0.5
-        legParts[1].shin.rotation.x = Math.max(0, -legSwing) * 0.5
+        legParts[0].shin.rotation.x = Math.max(0, legSwing) * 0.35
+        legParts[1].shin.rotation.x = Math.max(0, -legSwing) * 0.35
 
         // ── Body bob (double-frequency of steps) ──
-        const bob = Math.abs(Math.sin(walkCycle)) * T * 0.04
+        const bob = Math.abs(Math.sin(walkCycle)) * T * 0.03
         torso.position.y = T * 0.28 + bob
         head.position.y = T * 0.56 + bob
 
         // ── Slight torso lean forward ──
-        torso.rotation.x = 0.08
+        torso.rotation.x = 0.05
 
         // ── Subtle body sway ──
-        torso.rotation.z = Math.sin(walkCycle) * 0.04
-        head.rotation.z = Math.sin(walkCycle) * 0.02
+        torso.rotation.z = Math.sin(walkCycle) * 0.025
+        head.rotation.z = Math.sin(walkCycle) * 0.012
 
         // ── Shadow pulse ──
         const sBob = 1 - bob * 1.5
@@ -1704,7 +1704,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         root.rotation.y = targetRot
 
         if ((root as any).stopTimer) clearTimeout((root as any).stopTimer)
-        ;(root as any).stopTimer = setTimeout(() => { isMoving = false }, 300)
+        ;(root as any).stopTimer = setTimeout(() => { isMoving = false }, 180)
       }
     }
 
@@ -1865,8 +1865,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     const pauseBtn = document.createElement('div')
     pauseBtn.innerHTML = '⏸️'
     pauseBtn.style.position = 'absolute'
-    pauseBtn.style.top = '12px'
-    pauseBtn.style.right = '12px'
+    pauseBtn.style.top = 'calc(12px + env(safe-area-inset-top, 0px))'
+    pauseBtn.style.right = 'calc(12px + env(safe-area-inset-right, 0px))'
     pauseBtn.style.left = 'auto'
     pauseBtn.style.width = '44px'
     pauseBtn.style.height = '44px'
@@ -1896,14 +1896,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   playerUIDiv.className = 'game-ui-panel'
   playerUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-    // Top left on mobile, compact and out of the way of controls
-    playerUIDiv.style.top = '10px'
-    playerUIDiv.style.left = '10px'
-    playerUIDiv.style.bottom = 'auto'
+    // Center at same height as d-pad and bomb button
+    playerUIDiv.style.top = 'auto'
+    playerUIDiv.style.bottom = 'calc(120px + env(safe-area-inset-bottom, 0px))'
+    playerUIDiv.style.left = '50%'
     
-    // Scale down to save space
-    playerUIDiv.style.transform = 'scale(0.75)'
-    playerUIDiv.style.transformOrigin = 'top left'
+    // Scale down and center vertically within controls area
+    playerUIDiv.style.transform = 'translateX(-50%) scale(0.7)'
+    playerUIDiv.style.transformOrigin = 'center center'
   } else {
     // PC: Centered at bottom with transparency
     playerUIDiv.style.bottom = '15px'
@@ -1943,8 +1943,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   centerUIDiv.className = 'center-ui'
   centerUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-    // Top center on mobile, compact
-    centerUIDiv.style.top = '10px'
+    // Top center on mobile, compact — minimal footprint to avoid blocking view
+    centerUIDiv.style.top = '6px'
     centerUIDiv.style.bottom = 'auto'
   } else {
     // PC: Keep at top center - doesn't block corners
@@ -1954,7 +1954,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   centerUIDiv.style.transform = 'translateX(-50%)'
   centerUIDiv.style.color = 'white'
   centerUIDiv.style.fontFamily = "'Press Start 2P', 'Russo One', sans-serif"
-  centerUIDiv.style.fontSize = isMobileDevice ? '14px' : '12px'
+  centerUIDiv.style.fontSize = isMobileDevice ? '11px' : '12px'
   centerUIDiv.style.fontWeight = 'bold'
   centerUIDiv.style.zIndex = '1000'
   centerUIDiv.style.textAlign = 'center'
@@ -1963,7 +1963,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     : 'linear-gradient(135deg, rgba(0,0,0,0.5) 0%, rgba(30,30,60,0.55) 100%)'
   centerUIDiv.style.border = '3px solid rgba(255, 102, 0, 0.5)'
   centerUIDiv.style.borderRadius = '12px'
-  centerUIDiv.style.padding = isMobileDevice ? '12px 20px' : '8px 16px'
+  centerUIDiv.style.padding = isMobileDevice ? '6px 14px' : '8px 16px'
   centerUIDiv.style.boxShadow = '0 0 20px rgba(255, 102, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
   document.body.appendChild(centerUIDiv)
 
@@ -2148,6 +2148,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     }
     
     if (gameOver) {
+      // Hide pause menu if it was showing during game over
+      isPaused = false
+      pauseMenu.style.display = 'none'
+
       // Create a winner overlay instead of appending to playerUI
       const existingOverlay = document.getElementById('game-over-overlay')
       if (!existingOverlay) {
@@ -2217,6 +2221,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         // Helper: make button touch-friendly
         const touchActivate = (btn: HTMLButtonElement) => {
           ;(btn.style as any).webkitTapHighlightColor = 'transparent'
+          btn.style.touchAction = 'manipulation'
+          btn.style.userSelect = 'none'
           btn.addEventListener('touchstart', () => btn.style.transform = 'scale(0.95)', { passive: true })
           btn.addEventListener('touchend', () => btn.style.transform = '', { passive: true })
         }
@@ -2250,6 +2256,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           playerUIDiv.remove()
           opponentUIDiv.remove()
           centerUIDiv.remove()
+          // Clean up mobile controls and indicators (match "Main Menu" cleanup)
+          document.querySelectorAll('.mobile-controls-container, .mobile-controls-wrapper, .mobile-pause-btn, .offscreen-indicator, #indicator-container').forEach(el => el.remove())
           startGame(gameMode)
         })
         buttonContainer.appendChild(restartBtn)
@@ -2285,13 +2293,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           centerUIDiv.remove()
           mainMenu.style.display = 'flex'
           
-          if (currentEngine) {
-            currentEngine.dispose()
-            currentEngine = null
-          }
+          // Dispose scene first, then engine (correct order for GPU resource cleanup)
           if (currentScene) {
             currentScene.dispose()
             currentScene = null
+          }
+          if (currentEngine) {
+            currentEngine.dispose()
+            currentEngine = null
           }
           
           document.querySelectorAll('#app > div').forEach(el => {
@@ -2547,7 +2556,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     bombs.push({
       x,
       y,
-      timer: 2200, // 2.2 seconds
+      timer: 2000, // 2.0 seconds
       mesh: bombMesh,
       blastRadius: effectiveBlastRadius,
       ownerId,
@@ -2607,7 +2616,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Shared particle constants (avoid per-system allocations)
   let _sharedFlareTexture: Texture | null = null
   function getSharedFlareTexture(): Texture {
-    if (_sharedFlareTexture) return _sharedFlareTexture
+    if (_sharedFlareTexture && !(_sharedFlareTexture as any)._isDisposed) return _sharedFlareTexture
     try {
       _sharedFlareTexture = new Texture(FLARE_TEXTURE_DATA_URI, scene)
     } catch (e) {
@@ -2621,12 +2630,12 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   const FIRE_GRAVITY = new Vector3(0, 2, 0)
   const FIRE_DIR1 = new Vector3(-1.5, 2, -1.5)
   const FIRE_DIR2 = new Vector3(1.5, 3, 1.5)
-  const SMOKE_COLOR1 = new Color4(0.9, 0.9, 0.9, 0.8)
-  const SMOKE_COLOR2 = new Color4(0.7, 0.7, 0.7, 0.6)
+  const SMOKE_COLOR1 = new Color4(0.85, 0.85, 0.85, 0.7)
+  const SMOKE_COLOR2 = new Color4(0.65, 0.65, 0.65, 0.5)
   const SMOKE_COLOR_DEAD = new Color4(0.5, 0.5, 0.5, 0)
-  const SMOKE_GRAVITY = new Vector3(0, 0.5, 0)
-  const SMOKE_DIR1 = new Vector3(-0.5, 0.5, -0.5)
-  const SMOKE_DIR2 = new Vector3(0.5, 1.5, 0.5)
+  const SMOKE_GRAVITY = new Vector3(0, 0.3, 0)
+  const SMOKE_DIR1 = new Vector3(-1.2, 0.3, -1.2)
+  const SMOKE_DIR2 = new Vector3(1.2, 1.8, 1.2)
 
   // Create particle system for explosions
   function createExplosionParticles(x: number, y: number) {
@@ -2664,9 +2673,13 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     particleSystem.start()
 
     setTimeout(() => {
+      if (scene.isDisposed) return
       particleSystem.stop()
       setTimeout(() => {
-        if (!scene.isDisposed) particleSystem.dispose()
+        if (!scene.isDisposed) {
+          particleSystem.particleTexture = null // protect shared texture
+          particleSystem.dispose()
+        }
       }, 400)
     }, 150)
   }
@@ -2675,7 +2688,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Shared smoke texture (reused across all smoke particle systems)
   let _sharedSmokeTexture: Texture | null = null
   function getSharedSmokeTexture(): Texture {
-    if (_sharedSmokeTexture) return _sharedSmokeTexture
+    if (_sharedSmokeTexture && !(_sharedSmokeTexture as any)._isDisposed) return _sharedSmokeTexture
     const dynamicTexture = new DynamicTexture("smokeTexture-shared", 64, scene, false);
     const ctx = dynamicTexture.getContext();
     const size = dynamicTexture.getSize();
@@ -2694,10 +2707,12 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
   // Create smoke particles for after explosion
   function createSmokeParticles(x: number, y: number) {
-    const smokeSystem = new ParticleSystem('smoke', 50, scene)
+    const smokeSystem = new ParticleSystem('smoke', 100, scene)
     
-    // Use Vector3 emitter directly (no mesh allocation needed)
+    // Wide emit box so smoke starts beyond a single tile
     smokeSystem.emitter = gridToWorld(x, y)
+    smokeSystem.minEmitBox = new Vector3(-0.4, 0, -0.4)
+    smokeSystem.maxEmitBox = new Vector3(0.4, 0.15, 0.4)
     
     smokeSystem.particleTexture = getSharedSmokeTexture()
 
@@ -2705,30 +2720,45 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     smokeSystem.color2 = SMOKE_COLOR2
     smokeSystem.colorDead = SMOKE_COLOR_DEAD
     
+    // Large particles that visually overlap across tiles
     smokeSystem.minSize = 0.4
-    smokeSystem.maxSize = 0.8
+    smokeSystem.maxSize = 1.4
     
     smokeSystem.minLifeTime = 0.8
-    smokeSystem.maxLifeTime = 1.5
+    smokeSystem.maxLifeTime = 2.2
     
-    smokeSystem.emitRate = 80
+    smokeSystem.emitRate = 100
     smokeSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
     
     smokeSystem.gravity = SMOKE_GRAVITY
     smokeSystem.direction1 = SMOKE_DIR1
     smokeSystem.direction2 = SMOKE_DIR2
     
-    smokeSystem.minEmitPower = 0.5
-    smokeSystem.maxEmitPower = 1.2
+    // Enough power to drift into neighboring tiles
+    smokeSystem.minEmitPower = 0.4
+    smokeSystem.maxEmitPower = 1.4
+    
+    // Rotation for natural billowing & merging appearance
+    smokeSystem.minAngularSpeed = -0.8
+    smokeSystem.maxAngularSpeed = 0.8
+    
+    // Size growth over lifetime — particles expand as they rise
+    smokeSystem.addSizeGradient(0, 0.4)
+    smokeSystem.addSizeGradient(0.4, 1.0)
+    smokeSystem.addSizeGradient(1.0, 1.6)
     
     smokeSystem.start()
     
     setTimeout(() => {
+      if (scene.isDisposed) return
       smokeSystem.stop()
       setTimeout(() => {
-        if (!scene.isDisposed) smokeSystem.dispose()
+        if (!scene.isDisposed) {
+          smokeSystem.particleTexture = null // protect shared texture
+          smokeSystem.dispose()
+        }
       }, 2000)
-    }, 300)
+    }, 350)
   }
 
   // Explode bomb function
@@ -2736,7 +2766,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     // Screen shake and sound
     screenShake(0.4, 250)
     if (soundManager) soundManager.playSFX('explosion')
-    haptic([30, 20, 50])
+    haptic([50, 30, 80])
     
     // Check if bomb owner has pierce ability
     const ownerHasPierce = bomb.ownerId === -1 ? hasPierce :
@@ -2801,11 +2831,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       // Create fire particle effect
       createExplosionParticles(x, y)
 
-      // Add smoke after fire
-      setTimeout(() => createSmokeParticles(x, y), 100)
+      // Add smoke after fire (slightly later so smoke is visible after fireball fades)
+      setTimeout(() => createSmokeParticles(x, y), 150)
 
       // Staggered timing for directional tiles (ripple outward)
-      const delay = idx === 0 ? 0 : idx * 1.2
+      const delay = idx === 0 ? 0 : idx * 0.8
 
       // ── Fireball animation ──
       const scaleAnim = new Animation('scaleAnim', 'scaling', 60, Animation.ANIMATIONTYPE_VECTOR3)
@@ -2825,25 +2855,25 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         { frame: delay + 20, value: 0 },
       ])
       fireball.animations.push(fadeAnim)
-      scene.beginAnimation(fireball, 0, 24, false)
+      scene.beginAnimation(fireball, 0, delay + 24, false)
 
-      // ── Halo animation (expand & fade) ──
+      // ── Halo animation (expand & fade) — shorter to reduce glow lingering ──
       const haloScale = new Animation('haloScale', 'scaling', 60, Animation.ANIMATIONTYPE_VECTOR3)
       haloScale.setKeys([
         { frame: delay + 0, value: new Vector3(0.3, 0.3, 0.3) },
-        { frame: delay + 5, value: new Vector3(1.5, 1.5, 1.5) },
-        { frame: delay + 18, value: new Vector3(2.0, 0.5, 2.0) },
+        { frame: delay + 4, value: new Vector3(1.5, 1.5, 1.5) },
+        { frame: delay + 10, value: new Vector3(2.0, 0.5, 2.0) },
       ])
       halo.animations.push(haloScale)
 
       const haloFade = new Animation('haloFade', 'visibility', 60, Animation.ANIMATIONTYPE_FLOAT)
       haloFade.setKeys([
         { frame: delay + 0, value: 0.5 },
-        { frame: delay + 6, value: 0.35 },
-        { frame: delay + 18, value: 0 },
+        { frame: delay + 4, value: 0.3 },
+        { frame: delay + 10, value: 0 },
       ])
       halo.animations.push(haloFade)
-      scene.beginAnimation(halo, 0, 24, false)
+      scene.beginAnimation(halo, 0, delay + 14, false)
 
       // Scorch fades slowly
       const scorchFade = new Animation('scorchFade', 'visibility', 60, Animation.ANIMATIONTYPE_FLOAT)
@@ -2959,7 +2989,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           playerInvulnerable = true
           playerInvulnerableTimer = 1000 // Shorter invuln after shield break
           if (soundManager) soundManager.playSFX('powerup')
-          haptic([20, 10, 20])
+          haptic([40, 20, 40])
           const playerPos = gridToWorld(playerGridX, playerGridY)
           showHitIndicator(playerPos, scene, false)
           console.log('Shield absorbed hit! Charges remaining:', shieldCharges)
@@ -3134,7 +3164,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           player2Invulnerable = true
           player2InvulnerableTimer = 1000
           if (soundManager) soundManager.playSFX('powerup')
-          haptic([20, 10, 20])
+          haptic([40, 20, 40])
           console.log('Player 2 shield absorbed hit! Charges:', player2ShieldCharges)
           updateUI()
         } else {
@@ -3167,11 +3197,17 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     }
 
     // Remove explosion visuals after animation finishes
+    // Compute cleanup time: max of fireball/halo stagger + 24 frames, and scorch 60 frames
+    const maxDelay = (explosionTiles.length - 1) * 0.8
+    const fireballEndMs = Math.ceil(((maxDelay + 24) / 60) * 1000)
+    const scorchEndMs = 1000 // scorch animation runs to frame 60 at 60fps
+    const cleanupMs = Math.max(fireballEndMs, scorchEndMs) + 100
     setTimeout(() => {
+      if (scene.isDisposed) return
       explosionMeshes.forEach(mesh => {
-        mesh.dispose()
+        if (!mesh.isDisposed()) mesh.dispose()
       })
-    }, 1000)
+    }, cleanupMs)
 
     // Chain reaction: explode other bombs
     let triggeredChain = false
@@ -3210,7 +3246,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       const bomb = bombs[i]
       bomb.timer -= deltaTime
 
-      const timeRatio = bomb.timer / 2200
+      const timeRatio = bomb.timer / 2000
       const urgency = 1 - timeRatio // 0 → 1 as bomb nears detonation
 
       // ── Pulse: faster & stronger as timer runs out ──
@@ -3663,7 +3699,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         
         // Play sound and track stats
         if (soundManager) soundManager.playSFX('powerup')
-        haptic(20)
+        haptic(35)
         statsManager.recordPowerUpCollected()
         statsManager.recordBlastRadius(blastRadius)
         statsManager.recordBombCount(maxBombs)
@@ -3769,7 +3805,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       
       // Play kick sound
       if (soundManager) soundManager.playSFX('kick')
-      haptic(15)
+      haptic(30)
       
       // Animate the bomb movement
       const targetPos = gridToWorld(bombAtTarget.x, bombAtTarget.y)
@@ -3833,7 +3869,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       
       // Play throw sound
       if (soundManager) soundManager.playSFX('throw')
-      haptic(15)
+      haptic(30)
       
       // Animate the bomb movement (faster than kick)
       const targetPos = gridToWorld(bombAtPlayer.x, bombAtPlayer.y)
@@ -3892,7 +3928,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     
     // Play sound
     if (soundManager) soundManager.playSFX('bomb-place')
-    haptic(10)
+    haptic(25)
   }
 
   // Player 2 throw bomb
@@ -4603,7 +4639,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       updateOffscreenIndicators()
 
       updateBombs(deltaTime)
-      updateEnemies(deltaTime)
+      if (!gameOver) updateEnemies(deltaTime)
       updateInvulnerability(deltaTime)
       
       // Update time attack
@@ -4647,11 +4683,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
 function startGame(mode: GameMode) {
   // Clean up previous game
-  if (currentEngine) {
-    currentEngine.dispose()
-  }
   if (currentScene) {
     currentScene.dispose()
+  }
+  if (currentEngine) {
+    currentEngine.dispose()
   }
 
   currentEngine = new Engine(canvas, true)
@@ -4727,14 +4763,14 @@ const pauseMenu = createPauseMenu(
 
     if (soundManager) soundManager.stopMusic()
     
-    // Clean up game
-    if (currentEngine) {
-      currentEngine.dispose()
-      currentEngine = null
-    }
+    // Clean up game — dispose scene first, then engine (correct order for GPU resource cleanup)
     if (currentScene) {
       currentScene.dispose()
       currentScene = null
+    }
+    if (currentEngine) {
+      currentEngine.dispose()
+      currentEngine = null
     }
     
     // Remove UI elements
@@ -4755,7 +4791,7 @@ document.body.appendChild(pauseMenu)
 // Create settings menu
 const settingsMenu = createSettingsMenu(
   settingsManager,
-  soundManager,
+  () => soundManager,
   () => {
     settingsMenu.style.display = 'none'
     mainMenu.style.display = 'flex'
