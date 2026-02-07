@@ -1897,14 +1897,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   playerUIDiv.className = 'game-ui-panel'
   playerUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-    // Flush to top-left as a tiny floating badge — out of the way
-    playerUIDiv.style.top = 'calc(4px + env(safe-area-inset-top, 0px))'
-    playerUIDiv.style.bottom = 'auto'
-    playerUIDiv.style.left = 'calc(4px + env(safe-area-inset-left, 0px))'
+    // Bottom-center, between dpad (left) and bomb button (right)
+    playerUIDiv.style.top = 'auto'
+    playerUIDiv.style.bottom = 'calc(10px + env(safe-area-inset-bottom, 0px))'
+    playerUIDiv.style.left = '50%'
     
-    // Small scale so it barely covers the map
-    playerUIDiv.style.transform = 'scale(0.55)'
-    playerUIDiv.style.transformOrigin = 'top left'
+    // Small scale, centered horizontally
+    playerUIDiv.style.transform = 'translateX(-50%) scale(0.55)'
+    playerUIDiv.style.transformOrigin = 'center bottom'
   } else {
     // PC: Centered at bottom with transparency
     playerUIDiv.style.bottom = '15px'
