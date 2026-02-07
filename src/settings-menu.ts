@@ -18,7 +18,7 @@ export function createSettingsMenu(
   settingsDiv.style.background = 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)'
   settingsDiv.style.display = 'none'
   settingsDiv.style.flexDirection = 'column'
-  settingsDiv.style.justifyContent = 'center'
+  settingsDiv.style.justifyContent = 'flex-start'
   settingsDiv.style.alignItems = 'center'
   settingsDiv.style.zIndex = '2500'
   settingsDiv.style.fontFamily = "'Russo One', sans-serif"

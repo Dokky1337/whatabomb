@@ -1727,7 +1727,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Player stats (affected by difficulty)
   let maxBombs = 1
   let currentBombs = 0
-  let blastRadius = 2
+  let blastRadius = 1
   let playerLives = difficultyConfig.playerStartingLives
   let playerInvulnerable = false
   let playerInvulnerableTimer = 0
@@ -1804,7 +1804,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   let player2InvulnerableTimer = 0
   let player2MaxBombs = 1
   let player2CurrentBombs = 0
-  let player2BlastRadius = 2
+  let player2BlastRadius = 1
   let player2HasKick = false
   let player2HasThrow = false
   let player2Speed = 1
