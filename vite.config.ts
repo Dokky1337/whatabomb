@@ -22,11 +22,11 @@ export default defineConfig({
   },
   // Optimize dependencies
   optimizeDeps: {
-    include: ['babylonjs'],
+    include: ['@babylonjs/core'],
   },
   // Esbuild options - remove console.logs in production
   esbuild: {
-    drop: ['console', 'debugger'],
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
   },
   // Server settings for development
   server: {

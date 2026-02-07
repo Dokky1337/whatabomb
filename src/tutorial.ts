@@ -63,9 +63,21 @@ export function createTutorialScreen(onClose: () => void): HTMLDivElement {
       items: [
         '<span style="color: #60a5fa;">💣 Extra Bomb</span> - Carry more bombs at once',
         '<span style="color: #fbbf24;">⚡ Larger Blast</span> - Increase explosion radius',
-        '<span style="color: #a78bfa;">👟 Kick</span> - Walk into bombs to kick them',
+        '<span style="color: #a78bfa;">🦶 Kick</span> - Walk into bombs to kick them',
         '<span style="color: #f472b6;">✋ Throw</span> - Press bomb key to throw',
-        '<span style="color: #22d3ee;">🚀 Speed</span> - Move faster',
+        '<span style="color: #22d3ee;">👟 Speed</span> - Move faster',
+      ]
+    },
+    {
+      title: '🎲 Extended Power-Ups',
+      color: '#ff6600',
+      items: [
+        '<span style="color: #999;">Enable in Settings → Extended Power-Ups</span>',
+        '<span style="color: #ffd700;">🛡️ Shield</span> - Absorbs one explosion hit (max 3)',
+        '<span style="color: #ff3333;">🔥 Pierce</span> - Blasts pass through destructible blocks',
+        '<span style="color: #b388ff;">👻 Ghost</span> - Walk through blocks & bombs for 8s',
+        '<span style="color: #ff6600;">☢️ Power Bomb</span> - Next bomb gets +3 blast radius',
+        '<span style="color: #ff00ff;">🧨 Line Bomb</span> - Place a row of bombs in facing direction',
       ]
     },
     {

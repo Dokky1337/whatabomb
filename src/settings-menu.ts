@@ -86,6 +86,26 @@ export function createSettingsMenu(
   )
   settingsContainer.appendChild(particlesSection)
 
+  // Extended Power-Ups Toggle
+  const extendedPowerUpsSection = createToggleSetting(
+    '🎲 Extended Power-Ups',
+    settings.extendedPowerUps,
+    (value) => {
+      settingsManager.setExtendedPowerUps(value)
+    }
+  )
+  settingsContainer.appendChild(extendedPowerUpsSection)
+
+  // Add description below the toggle
+  const extendedPowerUpsDesc = document.createElement('div')
+  extendedPowerUpsDesc.style.fontSize = '11px'
+  extendedPowerUpsDesc.style.color = '#888'
+  extendedPowerUpsDesc.style.marginTop = '-18px'
+  extendedPowerUpsDesc.style.marginBottom = '20px'
+  extendedPowerUpsDesc.style.lineHeight = '1.5'
+  extendedPowerUpsDesc.innerHTML = 'Adds 5 new power-ups: 🛡️ Shield, 🔥 Pierce, 👻 Ghost, ☢️ Power Bomb, 🧨 Line Bomb'
+  settingsContainer.appendChild(extendedPowerUpsDesc)
+
   // Difficulty Selection
   const difficultySection = createDifficultySetting(
     settings.difficulty,

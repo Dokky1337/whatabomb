@@ -37,6 +37,8 @@ body {
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 /* Mobile canvas sizing - ensure larger render area */
@@ -516,41 +518,43 @@ body {
 .dpad {
   position: absolute;
   /* Lowered to not cover game area */
-  bottom: 80px;
-  left: 20px;
-  width: 150px;
-  height: 150px;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  left: calc(20px + env(safe-area-inset-left, 0px));
+  width: 190px;
+  height: 190px;
   pointer-events: auto;
 }
 
 .dpad-btn {
   position: absolute;
-  width: 50px;
-  height: 50px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
+  width: 60px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 14px;
   backdrop-filter: blur(2px);
   touch-action: none;
-  transition: background 0.1s;
+  transition: background 0.08s;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .dpad-btn:active, .dpad-btn.active {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.45);
+  transform: scale(0.93);
 }
 
-.dpad-up { top: 0; left: 50px; }
-.dpad-down { bottom: 0; left: 50px; }
-.dpad-left { top: 50px; left: 0; }
-.dpad-right { top: 50px; right: 0; }
+.dpad-up { top: 0; left: 65px; }
+.dpad-down { bottom: 0; left: 65px; }
+.dpad-left { top: 65px; left: 0; }
+.dpad-right { top: 65px; right: 0; }
 
 /* Arrows on dpad buttons */
 /* The user requested moving arrows up slightly. padding-bottom pushes grid content up. */
 /* Increased padding to move icon further up (visually) inside the button */
-.dpad-up::after { content: "▲"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; padding-bottom: 12px; }
-.dpad-down::after { content: "▼"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; padding-bottom: 12px; }
-.dpad-left::after { content: "◀"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; padding-bottom: 12px; }
-.dpad-right::after { content: "▶"; color: rgba(255,255,255,0.7); display: grid; place-items: center; height: 100%; padding-bottom: 12px; }
+.dpad-up::after { content: "▲"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 18px; }
+.dpad-down::after { content: "▼"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 18px; }
+.dpad-left::after { content: "◀"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 18px; }
+.dpad-right::after { content: "▶"; color: rgba(255,255,255,0.8); display: grid; place-items: center; height: 100%; font-size: 18px; }
 
 .offscreen-indicator {
   position: absolute;
@@ -582,32 +586,33 @@ body {
 .action-btn-container {
   position: absolute;
   /* Lowered to not cover game area */
-  bottom: 90px;
-  right: 30px;
+  bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  right: calc(25px + env(safe-area-inset-right, 0px));
   pointer-events: auto;
 }
 
 .action-btn {
-  width: 90px;
-  height: 90px;
-  background: rgba(255, 60, 60, 0.25);
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 60, 60, 0.3);
   border: 3px solid rgba(255, 100, 100, 0.5);
   border-radius: 50%;
   backdrop-filter: blur(2px);
   touch-action: none;
+  -webkit-tap-highlight-color: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: 'Russo One', sans-serif;
-  font-size: 16px;
+  font-size: 17px;
   color: rgba(255,255,255,0.9);
   text-shadow: 1px 1px 2px black;
-  transition: transform 0.1s, background 0.1s;
+  transition: transform 0.08s, background 0.08s;
 }
 
 .action-btn:active, .action-btn.active {
-  background: rgba(255, 60, 60, 0.5);
-  transform: scale(0.92);
+  background: rgba(255, 60, 60, 0.55);
+  transform: scale(0.90);
 }
 
 /* PC text scaling - larger screens get larger text */

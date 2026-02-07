@@ -30,7 +30,7 @@ A fast-paced, explosive multiplayer Bomberman-style game built with TypeScript a
 - **Larger Blast** (Yellow) - Bigger explosion radius
 - **Kick** (Brown) - Kick bombs by walking into them
 - **Throw** (Peach) - Throw bombs 3 tiles away
-- **Speed** (Cyan) - Move faster 🚀
+- **Speed** (Cyan) - Move faster �
 
 ## Development
 

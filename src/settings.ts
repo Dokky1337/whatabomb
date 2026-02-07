@@ -7,6 +7,7 @@ export interface GameSettings {
   player1Color: string
   player2Color: string
   characterShape: 'sphere' | 'cat' | 'dog'
+  extendedPowerUps: boolean
 }
 
 export const PLAYER_COLORS = [
@@ -49,6 +50,7 @@ export class SettingsManager {
           player1Color: parsed.player1Color ?? '#4ade80',
           player2Color: parsed.player2Color ?? '#60a5fa',
           characterShape: parsed.characterShape ?? 'sphere',
+          extendedPowerUps: parsed.extendedPowerUps ?? false,
         }
       } catch (e) {
         console.error('Failed to load settings:', e)
@@ -64,6 +66,7 @@ export class SettingsManager {
       player1Color: '#4ade80',
       player2Color: '#60a5fa',
       characterShape: 'sphere',
+      extendedPowerUps: false,
     }
   }
 
@@ -112,6 +115,11 @@ export class SettingsManager {
 
   setCharacterShape(shape: 'sphere' | 'cat' | 'dog') {
     this.settings.characterShape = shape
+    this.saveSettings()
+  }
+
+  setExtendedPowerUps(enabled: boolean) {
+    this.settings.extendedPowerUps = enabled
     this.saveSettings()
   }
 }

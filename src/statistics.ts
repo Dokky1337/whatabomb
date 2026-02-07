@@ -18,21 +18,13 @@ export interface GameStats {
 export class StatisticsManager {
   private stats: GameStats
   private storageKey = 'whatabomb-stats'
+  private saveTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor() {
     this.stats = this.loadStats()
   }
 
-  private loadStats(): GameStats {
-    const saved = localStorage.getItem(this.storageKey)
-    if (saved) {
-      try {
-        return JSON.parse(saved)
-      } catch (e) {
-        console.error('Failed to load stats:', e)
-      }
-    }
-    
+  private getDefaultStats(): GameStats {
     return {
       gamesPlayed: 0,
       wins: 0,
@@ -51,11 +43,36 @@ export class StatisticsManager {
     }
   }
 
+  private loadStats(): GameStats {
+    const saved = localStorage.getItem(this.storageKey)
+    if (saved) {
+      try {
+        return { ...this.getDefaultStats(), ...JSON.parse(saved) }
+      } catch (e) {
+        console.error('Failed to load stats:', e)
+      }
+    }
+    
+    return this.getDefaultStats()
+  }
+
   private saveStats() {
+    // Debounce saves to avoid writing to localStorage on every single action
+    if (this.saveTimer) clearTimeout(this.saveTimer)
+    this.saveTimer = setTimeout(() => {
+      localStorage.setItem(this.storageKey, JSON.stringify(this.stats))
+      this.saveTimer = null
+    }, 500)
+  }
+
+  // Force immediate save (e.g. on game over)
+  private saveStatsNow() {
+    if (this.saveTimer) clearTimeout(this.saveTimer)
+    this.saveTimer = null
     localStorage.setItem(this.storageKey, JSON.stringify(this.stats))
   }
 
-  // Record game result
+  // Record game result (immediate save since game is ending)
   recordWin() {
     this.stats.gamesPlayed++
     this.stats.wins++
@@ -63,14 +80,14 @@ export class StatisticsManager {
     if (this.stats.currentWinStreak > this.stats.longestWinStreak) {
       this.stats.longestWinStreak = this.stats.currentWinStreak
     }
-    this.saveStats()
+    this.saveStatsNow()
   }
 
   recordLoss() {
     this.stats.gamesPlayed++
     this.stats.losses++
     this.stats.currentWinStreak = 0
-    this.saveStats()
+    this.saveStatsNow()
   }
 
   // Record actions
@@ -116,12 +133,11 @@ export class StatisticsManager {
   recordSurvivalScore(wave: number, score: number) {
     if (score > this.stats.survivalHighScore) {
       this.stats.survivalHighScore = score
-      this.saveStats()
     }
     if (wave > this.stats.survivalHighWave) {
       this.stats.survivalHighWave = wave
-      this.saveStats()
     }
+    this.saveStatsNow()
   }
 
   getStats(): GameStats {
@@ -150,6 +166,6 @@ export class StatisticsManager {
       survivalHighScore: 0,
       survivalHighWave: 0,
     }
-    this.saveStats()
+    this.saveStatsNow()
   }
 }

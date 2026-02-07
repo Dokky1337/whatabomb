@@ -1,6 +1,6 @@
 import { FLARE_TEXTURE_DATA_URI } from './assets'
 import './style.css'
-import { isMobile } from './device'
+import { isMobile, haptic } from './device'
 import {
   ArcRotateCamera,
   Camera,
@@ -35,7 +35,7 @@ import { AchievementsManager } from './achievements'
 import { createAchievementsScreen, showAchievementNotification } from './achievements-screen'
 import { createTutorialScreen } from './tutorial'
 import { createMapSelectionScreen } from './map-selection'
-import { getMapConfig, type MapConfig } from './maps'
+import { getMapConfig, type MapConfig, type MapTheme } from './maps'
 import { showHitIndicator } from './visual-effects'
 import { shouldAIPlaceBomb, getEscapeDirection, isPositionSafe } from './ai-bomb-logic'
 
@@ -77,7 +77,7 @@ type TileType = 'empty' | 'wall' | 'destructible'
 
 type Grid = TileType[][]
 
-type PowerUpType = 'extraBomb' | 'largerBlast' | 'kick' | 'throw' | 'speed'
+type PowerUpType = 'extraBomb' | 'largerBlast' | 'kick' | 'throw' | 'speed' | 'shield' | 'pierce' | 'ghost' | 'powerBomb' | 'lineBomb'
 
 interface PowerUp {
   x: number
@@ -108,7 +108,7 @@ interface Enemy {
   visualZ?: number
 }
 
-function createGrid(width: number, height: number, paddingBottom: number = 0): Grid {
+function createGrid(width: number, height: number, paddingBottom: number = 0, theme: MapTheme = 'classic'): Grid {
   const grid: Grid = []
   const totalHeight = height + paddingBottom
 
@@ -128,18 +128,102 @@ function createGrid(width: number, height: number, paddingBottom: number = 0): G
       const isBorder = x === 0 || y === 0 || x === width - 1 || y === height - 1
       const isInnerPillar = x % 2 === 0 && y % 2 === 0
 
-      if (isBorder || isInnerPillar) {
+      if (isBorder) {
         row.push('wall')
-      } else {
-        // Add destructible blocks randomly (about 80% of empty tiles)
-        if (Math.random() < 0.8) {
-          row.push('destructible')
+      } else if (isInnerPillar) {
+        // Theme-specific pillar variations
+        if (theme === 'ice') {
+          // Ice: remove some inner pillars to create open frozen lakes
+          const cx = width / 2, cy = height / 2
+          const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+          row.push(dist < Math.min(width, height) * 0.25 ? 'empty' : 'wall')
+        } else if (theme === 'lava') {
+          // Lava: keep all pillars (tight dangerous corridors)
+          row.push('wall')
+        } else if (theme === 'space' || theme === 'moon') {
+          // Space/Moon: remove alternate pillars for more open feel
+          row.push((x + y) % 4 === 0 ? 'wall' : 'empty')
         } else {
-          row.push('empty')
+          row.push('wall')
+        }
+      } else {
+        // Theme-specific destructible density & extra walls
+        if (theme === 'lava') {
+          // Lava: add "lava channels" - extra walls forming corridors
+          const isChannel = (y % 4 === 1 && x > 3 && x < width - 4 && x % 6 === 0) ||
+                            (x % 4 === 1 && y > 3 && y < height - 4 && y % 6 === 0)
+          if (isChannel) {
+            row.push('wall')
+          } else {
+            row.push(Math.random() < 0.75 ? 'destructible' : 'empty')
+          }
+        } else if (theme === 'ice') {
+          // Ice: less clutter, more open space
+          row.push(Math.random() < 0.6 ? 'destructible' : 'empty')
+        } else if (theme === 'forest') {
+          // Forest: organic clusters - higher density near pillars, clearings elsewhere
+          const nearPillar = (x > 0 && row[x - 1] === 'wall') ||
+                             (y > 0 && grid[y - 1] && grid[y - 1][x] === 'wall')
+          row.push(Math.random() < (nearPillar ? 0.92 : 0.65) ? 'destructible' : 'empty')
+        } else if (theme === 'space' || theme === 'moon') {
+          // Space: rooms and corridors - create open "rooms" with destructible walls between them
+          const inRoom = (x % 5 >= 1 && x % 5 <= 3 && y % 5 >= 1 && y % 5 <= 3)
+          if (inRoom) {
+            row.push(Math.random() < 0.35 ? 'destructible' : 'empty') // Open rooms
+          } else {
+            row.push(Math.random() < 0.85 ? 'destructible' : 'empty') // Dense corridors
+          }
+        } else {
+          // Classic: standard Bomberman density
+          row.push(Math.random() < 0.8 ? 'destructible' : 'empty')
         }
       }
     }
     grid.push(row)
+  }
+
+  // --- Add theme-specific structural features ---
+  if (theme === 'forest') {
+    // Add some small "clearing" circles
+    const clearings = 2 + Math.floor(Math.random() * 2)
+    for (let c = 0; c < clearings; c++) {
+      const cx = 3 + Math.floor(Math.random() * (width - 6))
+      const cy = 3 + Math.floor(Math.random() * (height - 6))
+      const r = 1.5 + Math.random()
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = cx + dx, ny = cy + dy
+          if (nx > 0 && ny > 0 && nx < width - 1 && ny < height - 1) {
+            if (Math.sqrt(dx * dx + dy * dy) <= r && grid[ny][nx] === 'destructible') {
+              grid[ny][nx] = 'empty'
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (theme === 'moon') {
+    // Add "crater" rings - circular wall patterns
+    const craters = 1 + Math.floor(Math.random() * 2)
+    for (let c = 0; c < craters; c++) {
+      const cx = 4 + Math.floor(Math.random() * (width - 8))
+      const cy = 4 + Math.floor(Math.random() * (height - 8))
+      const r = 2.5
+      for (let dy = -3; dy <= 3; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
+          const nx = cx + dx, ny = cy + dy
+          if (nx > 0 && ny > 0 && nx < width - 1 && ny < height - 1) {
+            const dist = Math.sqrt(dx * dx + dy * dy)
+            if (dist >= r - 0.5 && dist <= r + 0.5 && !(nx % 2 === 0 && ny % 2 === 0)) {
+              grid[ny][nx] = 'destructible'
+            } else if (dist < r - 0.5) {
+              grid[ny][nx] = 'empty'
+            }
+          }
+        }
+      }
+    }
   }
 
   // Ensure the top-left corner has some free tiles for player spawn
@@ -348,67 +432,15 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   glowLayer.intensity = 0.3
 
   // Materials (using map theme colors)
-  const groundMaterial = new StandardMaterial('groundMat', scene)
-  groundMaterial.diffuseColor = currentMapConfig.colors.ground
-  groundMaterial.specularColor = new Color3(0.05, 0.05, 0.05)
-  groundMaterial.specularPower = 64
-  groundMaterial.ambientColor = currentMapConfig.colors.ambient
-
+  // Materials (using map theme colors) — only create materials actually used
   const wallMaterial = new StandardMaterial('wallMat', scene)
   wallMaterial.diffuseColor = currentMapConfig.colors.wall
   wallMaterial.specularColor = new Color3(0.1, 0.1, 0.1)
   wallMaterial.specularPower = 32
 
-  const destructibleMaterial = new StandardMaterial('destructibleMat', scene)
-  destructibleMaterial.diffuseColor = currentMapConfig.colors.destructible
-  destructibleMaterial.specularColor = new Color3(0.1, 0.1, 0.1)
-  destructibleMaterial.specularPower = 16
-
-  const playerMaterial = new StandardMaterial('playerMat', scene)
-  playerMaterial.diffuseColor = new Color3(0.9, 0.1, 0.1)
-  playerMaterial.specularColor = new Color3(0, 0, 0)
-
-  const bombMaterial = new StandardMaterial('bombMat', scene)
-  bombMaterial.diffuseColor = new Color3(0.1, 0.1, 0.1)
-  bombMaterial.specularColor = new Color3(0.5, 0.5, 0.5)
-
-  const explosionMaterial = new StandardMaterial('explosionMat', scene)
-  explosionMaterial.diffuseColor = new Color3(1, 0.5, 0)
-  explosionMaterial.emissiveColor = new Color3(0.8, 0.2, 0)
-  explosionMaterial.specularColor = new Color3(0, 0, 0)
-
-  const powerUpBombMaterial = new StandardMaterial('powerUpBombMat', scene)
-  powerUpBombMaterial.diffuseColor = new Color3(0.2, 0.6, 1)
-  powerUpBombMaterial.emissiveColor = new Color3(0.1, 0.3, 0.8)
-  powerUpBombMaterial.specularColor = new Color3(1, 1, 1)
-
-  const powerUpBlastMaterial = new StandardMaterial('powerUpBlastMat', scene)
-  powerUpBlastMaterial.diffuseColor = new Color3(1, 0.8, 0.2)
-  powerUpBlastMaterial.emissiveColor = new Color3(0.8, 0.6, 0)
-  powerUpBlastMaterial.specularColor = new Color3(1, 1, 1)
-
-  const powerUpKickMaterial = new StandardMaterial('powerUpKickMat', scene)
-  powerUpKickMaterial.diffuseColor = new Color3(0.6, 0.3, 0.1)
-  powerUpKickMaterial.emissiveColor = new Color3(0.4, 0.2, 0)
-  powerUpKickMaterial.specularColor = new Color3(1, 1, 1)
-
-  const powerUpThrowMaterial = new StandardMaterial('powerUpThrowMat', scene)
-  powerUpThrowMaterial.diffuseColor = new Color3(1, 0.6, 0.4)
-  powerUpThrowMaterial.emissiveColor = new Color3(0.8, 0.4, 0.2)
-  powerUpThrowMaterial.specularColor = new Color3(1, 1, 1)
-
-  const powerUpSpeedMaterial = new StandardMaterial('powerUpSpeedMat', scene)
-  powerUpSpeedMaterial.diffuseColor = new Color3(0, 0.8, 1)
-  powerUpSpeedMaterial.emissiveColor = new Color3(0, 0.5, 1)
-  powerUpSpeedMaterial.specularColor = new Color3(1, 1, 1)
-
-  const enemyMaterial = new StandardMaterial('enemyMat', scene)
-  enemyMaterial.diffuseColor = new Color3(0.8, 0.2, 0.8)
-  enemyMaterial.specularColor = new Color3(0, 0, 0)
-
   // Create map geometry
   const paddingBottom = isMobile() ? 4 : 0
-  const grid = createGrid(GRID_WIDTH, GRID_HEIGHT, paddingBottom)
+  const grid = createGrid(GRID_WIDTH, GRID_HEIGHT, paddingBottom, currentMapConfig.theme)
   
   // Note: We do NOT update global GRID_HEIGHT here so game logic (spawns/borders) 
   // stays within playable area. Visuals will handle the extra rows.
@@ -426,39 +458,288 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     return tex
   }
 
-  // Create crate/barrel texture
-  const crateTexture = createTexture('#8B4513', (ctx) => {
-    ctx.fillStyle = '#654321'
-    ctx.fillRect(10, 0, 10, 128)
-    ctx.fillRect(40, 0, 10, 128)
-    ctx.fillRect(70, 0, 10, 128)
-    ctx.fillRect(100, 0, 10, 128)
-    ctx.fillRect(0, 10, 128, 10)
-    ctx.fillRect(0, 108, 128, 10)
-    
-    // Colorful patterns (Circles/Stars)
-    ctx.fillStyle = '#d97706' // Lighter wood/orange spot
-    ctx.beginPath()
-    ctx.arc(64, 64, 30, 0, Math.PI * 2)
-    ctx.fill()
-    
-    ctx.strokeStyle = '#fcd34d' // Bright yellow ring
-    ctx.lineWidth = 4
-    ctx.beginPath()
-    ctx.arc(64, 64, 25, 0, Math.PI * 2)
-    ctx.stroke()
+  // Create crate/barrel texture (theme-specific)
+  const theme = currentMapConfig.theme
+  const createDestructibleTexture = (theme: string) => {
+    return createTexture('#8B4513', (ctx) => {
+      const w = 128, h = 128
+      if (theme === 'ice') {
+        // ICE: Frosted ice block
+        ctx.fillStyle = '#b8dff0'
+        ctx.fillRect(0, 0, w, h)
+        ctx.fillStyle = 'rgba(255,255,255,0.5)'
+        ctx.fillRect(8, 8, w - 16, h - 16)
+        // Crack lines
+        ctx.strokeStyle = 'rgba(180,220,240,0.8)'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(20, 30); ctx.lineTo(60, 50); ctx.lineTo(110, 35)
+        ctx.moveTo(30, 90); ctx.lineTo(70, 70); ctx.lineTo(100, 95)
+        ctx.stroke()
+        // Frost sparkles
+        ctx.fillStyle = 'rgba(255,255,255,0.9)'
+        for (let i = 0; i < 8; i++) {
+          ctx.beginPath()
+          ctx.arc(15 + Math.random() * 98, 15 + Math.random() * 98, 2, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      } else if (theme === 'lava') {
+        // LAVA: Volcanic rock with glowing cracks
+        ctx.fillStyle = '#2a1a1a'
+        ctx.fillRect(0, 0, w, h)
+        ctx.fillStyle = '#1a0a0a'
+        ctx.fillRect(6, 6, w - 12, h - 12)
+        // Glowing magma cracks
+        ctx.strokeStyle = '#ff4400'
+        ctx.lineWidth = 3
+        ctx.shadowColor = '#ff6600'
+        ctx.shadowBlur = 6
+        ctx.beginPath()
+        ctx.moveTo(10, 40); ctx.lineTo(45, 55); ctx.lineTo(50, 90)
+        ctx.moveTo(70, 10); ctx.lineTo(80, 50); ctx.lineTo(120, 70)
+        ctx.stroke()
+        ctx.shadowBlur = 0
+        // Pumice holes
+        ctx.fillStyle = '#0a0505'
+        for (let i = 0; i < 5; i++) {
+          ctx.beginPath()
+          ctx.arc(20 + Math.random() * 88, 20 + Math.random() * 88, 3 + Math.random() * 3, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      } else if (theme === 'forest') {
+        // FOREST: Log / bush texture
+        ctx.fillStyle = '#3a5a20'
+        ctx.fillRect(0, 0, w, h)
+        // Leaf clusters
+        ctx.fillStyle = '#4a7a28'
+        for (let i = 0; i < 12; i++) {
+          ctx.beginPath()
+          ctx.arc(Math.random() * w, Math.random() * h, 10 + Math.random() * 12, 0, Math.PI * 2)
+          ctx.fill()
+        }
+        ctx.fillStyle = '#2a4a15'
+        for (let i = 0; i < 8; i++) {
+          ctx.beginPath()
+          ctx.arc(Math.random() * w, Math.random() * h, 6 + Math.random() * 8, 0, Math.PI * 2)
+          ctx.fill()
+        }
+        // Highlights
+        ctx.fillStyle = 'rgba(120,200,60,0.3)'
+        for (let i = 0; i < 6; i++) {
+          ctx.beginPath()
+          ctx.arc(Math.random() * w, Math.random() * h, 4, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      } else if (theme === 'space') {
+        // SPACE: Supply crate with markings
+        ctx.fillStyle = '#3a3a4a'
+        ctx.fillRect(0, 0, w, h)
+        ctx.fillStyle = '#2a2a3a'
+        ctx.fillRect(8, 8, w - 16, h - 16)
+        // Caution stripes
+        ctx.fillStyle = '#ccaa20'
+        for (let i = 0; i < 6; i++) {
+          ctx.save()
+          ctx.translate(w / 2, h / 2)
+          ctx.rotate(-Math.PI / 4)
+          ctx.fillRect(-80, -64 + i * 24, 160, 8)
+          ctx.restore()
+        }
+        // Corner bolts
+        ctx.fillStyle = '#666'
+        const r = 4
+        ctx.beginPath(); ctx.arc(14, 14, r, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(w - 14, 14, r, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(14, h - 14, r, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(w - 14, h - 14, r, 0, Math.PI * 2); ctx.fill()
+      } else if (theme === 'moon') {
+        // MOON: Regolith / dust pile
+        ctx.fillStyle = '#6a6a70'
+        ctx.fillRect(0, 0, w, h)
+        // Dusty texture spots
+        for (let i = 0; i < 20; i++) {
+          const shade = 80 + Math.floor(Math.random() * 40)
+          ctx.fillStyle = `rgb(${shade},${shade},${shade + 5})`
+          ctx.beginPath()
+          ctx.arc(Math.random() * w, Math.random() * h, 5 + Math.random() * 10, 0, Math.PI * 2)
+          ctx.fill()
+        }
+        ctx.strokeStyle = 'rgba(90,90,95,0.5)'
+        ctx.lineWidth = 1
+        ctx.strokeRect(10, 10, w - 20, h - 20)
+      } else {
+        // CLASSIC: Wooden crate
+        ctx.fillStyle = '#654321'
+        ctx.fillRect(10, 0, 10, 128)
+        ctx.fillRect(40, 0, 10, 128)
+        ctx.fillRect(70, 0, 10, 128)
+        ctx.fillRect(100, 0, 10, 128)
+        ctx.fillRect(0, 10, 128, 10)
+        ctx.fillRect(0, 108, 128, 10)
+        ctx.fillStyle = '#d97706'
+        ctx.beginPath()
+        ctx.arc(64, 64, 30, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = '#fcd34d'
+        ctx.lineWidth = 4
+        ctx.beginPath()
+        ctx.arc(64, 64, 25, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.fillStyle = '#ef4444'
+        ctx.fillRect(0, 0, 20, 20)
+        ctx.fillRect(108, 0, 20, 20)
+        ctx.fillRect(0, 108, 20, 20)
+        ctx.fillRect(108, 108, 20, 20)
+      }
+    })
+  }
 
-    // Corner accents
-    ctx.fillStyle = '#ef4444' // Red corners
-    ctx.fillRect(0, 0, 20, 20)
-    ctx.fillRect(108, 0, 20, 20)
-    ctx.fillRect(0, 108, 20, 20)
-    ctx.fillRect(108, 108, 20, 20)
-  })
-  
   const crateMaterial = new StandardMaterial('crateMat', scene)
-  crateMaterial.diffuseTexture = crateTexture
+  crateMaterial.diffuseTexture = createDestructibleTexture(theme)
   crateMaterial.specularColor = new Color3(0.1, 0.1, 0.1)
+  if (theme === 'ice') {
+    crateMaterial.alpha = 0.85
+    crateMaterial.specularColor = new Color3(0.6, 0.6, 0.6)
+    crateMaterial.specularPower = 64
+  }
+
+  // Theme-specific wall texture
+  const createWallTexture = (theme: string) => {
+    return createTexture('#555', (ctx) => {
+      const w = 128, h = 128
+      if (theme === 'ice') {
+        // Crystal ice pillar
+        ctx.fillStyle = '#8ab8d0'
+        ctx.fillRect(0, 0, w, h)
+        const grad = ctx.createLinearGradient(0, 0, w, h)
+        grad.addColorStop(0, 'rgba(200,230,255,0.5)')
+        grad.addColorStop(0.5, 'rgba(255,255,255,0.2)')
+        grad.addColorStop(1, 'rgba(180,210,240,0.5)')
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, w, h)
+        // Crystal facets
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(0, 30); ctx.lineTo(64, 50); ctx.lineTo(128, 20)
+        ctx.moveTo(0, 80); ctx.lineTo(64, 65); ctx.lineTo(128, 90)
+        ctx.stroke()
+      } else if (theme === 'lava') {
+        // Dark obsidian with orange veins
+        ctx.fillStyle = '#1a1010'
+        ctx.fillRect(0, 0, w, h)
+        ctx.fillStyle = '#252015'
+        ctx.fillRect(4, 4, w - 8, h - 8)
+        // Glowing veins
+        ctx.strokeStyle = '#cc3300'
+        ctx.lineWidth = 2
+        ctx.shadowColor = '#ff4400'
+        ctx.shadowBlur = 4
+        ctx.beginPath()
+        ctx.moveTo(0, 64); ctx.lineTo(30, 50); ctx.lineTo(60, 70); ctx.lineTo(128, 55)
+        ctx.stroke()
+        ctx.shadowBlur = 0
+      } else if (theme === 'forest') {
+        // Tree bark
+        ctx.fillStyle = '#4a3020'
+        ctx.fillRect(0, 0, w, h)
+        // Bark grain lines
+        ctx.strokeStyle = '#3a2515'
+        ctx.lineWidth = 3
+        for (let i = 0; i < 8; i++) {
+          const y = 8 + i * 15
+          ctx.beginPath()
+          ctx.moveTo(0, y); ctx.lineTo(40, y + 4); ctx.lineTo(90, y - 2); ctx.lineTo(128, y + 3)
+          ctx.stroke()
+        }
+        // Knot
+        ctx.fillStyle = '#2a1a0a'
+        ctx.beginPath()
+        ctx.ellipse(64, 64, 12, 18, 0, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = '#3a2515'
+        ctx.lineWidth = 2
+        ctx.stroke()
+      } else if (theme === 'space') {
+        // Metal panel
+        ctx.fillStyle = '#4a4a5a'
+        ctx.fillRect(0, 0, w, h)
+        ctx.fillStyle = '#3a3a4a'
+        ctx.fillRect(6, 6, w - 12, h - 12)
+        // Panel seams
+        ctx.strokeStyle = '#2a2a3a'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h)
+        ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2)
+        ctx.stroke()
+        // Rivets
+        ctx.fillStyle = '#666'
+        const rv = 3
+        ctx.beginPath(); ctx.arc(12, 12, rv, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(w - 12, 12, rv, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(12, h - 12, rv, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(w - 12, h - 12, rv, 0, Math.PI * 2); ctx.fill()
+        // Vent glow
+        ctx.fillStyle = 'rgba(0,200,255,0.15)'
+        ctx.fillRect(20, h / 2 - 3, w - 40, 6)
+      } else if (theme === 'moon') {
+        // Moon rock / regolith block
+        ctx.fillStyle = '#5a5a60'
+        ctx.fillRect(0, 0, w, h)
+        // Rocky texture
+        for (let i = 0; i < 15; i++) {
+          const shade = 70 + Math.floor(Math.random() * 30)
+          ctx.fillStyle = `rgb(${shade},${shade},${shade + 3})`
+          ctx.beginPath()
+          ctx.arc(Math.random() * w, Math.random() * h, 8 + Math.random() * 12, 0, Math.PI * 2)
+          ctx.fill()
+        }
+        // Impact pock marks
+        ctx.fillStyle = '#454550'
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath()
+          ctx.arc(20 + Math.random() * 88, 20 + Math.random() * 88, 4 + Math.random() * 5, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      } else {
+        // CLASSIC: Stone brick
+        ctx.fillStyle = '#707078'
+        ctx.fillRect(0, 0, w, h)
+        // Brick mortar lines
+        ctx.strokeStyle = '#55555a'
+        ctx.lineWidth = 4
+        // Horizontal mortar
+        ctx.beginPath()
+        ctx.moveTo(0, h * 0.33); ctx.lineTo(w, h * 0.33)
+        ctx.moveTo(0, h * 0.66); ctx.lineTo(w, h * 0.66)
+        ctx.stroke()
+        // Vertical mortar (offset per row)
+        ctx.beginPath()
+        ctx.moveTo(w * 0.5, 0); ctx.lineTo(w * 0.5, h * 0.33)
+        ctx.moveTo(w * 0.25, h * 0.33); ctx.lineTo(w * 0.25, h * 0.66)
+        ctx.moveTo(w * 0.75, h * 0.33); ctx.lineTo(w * 0.75, h * 0.66)
+        ctx.moveTo(w * 0.5, h * 0.66); ctx.lineTo(w * 0.5, h)
+        ctx.stroke()
+        // Subtle stone grain
+        ctx.fillStyle = 'rgba(0,0,0,0.06)'
+        for (let i = 0; i < 6; i++) {
+          ctx.fillRect(Math.random() * w, Math.random() * h, 20 + Math.random() * 30, 4)
+        }
+      }
+    })
+  }
+
+  wallMaterial.diffuseTexture = createWallTexture(theme)
+  if (theme === 'ice') {
+    wallMaterial.specularColor = new Color3(0.5, 0.5, 0.6)
+    wallMaterial.specularPower = 48
+  } else if (theme === 'lava') {
+    wallMaterial.emissiveColor = new Color3(0.08, 0.02, 0)
+  } else if (theme === 'space') {
+    wallMaterial.specularColor = new Color3(0.3, 0.3, 0.35)
+    wallMaterial.specularPower = 48
+  }
 
   // Create procedural floor texture based on theme
   const createFloorTexture = (theme: string) => {
@@ -470,7 +751,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       // Base background
       ctx.fillStyle = theme === 'ice' ? '#e8f4f8' : 
                       theme === 'lava' ? '#2a0a0a' : 
-                      theme === 'forest' ? '#0a2a0a' : '#1a1a1a'
+                      theme === 'forest' ? '#0a2a0a' :
+                      theme === 'moon' ? '#2a2a2e' : '#1a1a1a'
       ctx.fillRect(0, 0, w, h)
       
       // GRID LINES - Thicker, cleaner borders
@@ -568,6 +850,34 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         ctx.moveTo(w/2 - 5, h/2); ctx.lineTo(w/2 + 5, h/2)
         ctx.moveTo(w/2, h/2 - 5); ctx.lineTo(w/2, h/2 + 5)
         ctx.stroke()
+
+      } else if (theme === 'moon') {
+        // MOON: Grey dusty regolith surface
+        const grad = ctx.createRadialGradient(w/2, h/2, 5, w/2, h/2, 70)
+        grad.addColorStop(0, '#3a3a40')
+        grad.addColorStop(1, '#252528')
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, w, h)
+
+        // Tiny craters / pock marks
+        for (let i = 0; i < 6; i++) {
+          const cx = 15 + Math.random() * (w - 30)
+          const cy = 15 + Math.random() * (h - 30)
+          const cr = 2 + Math.random() * 4
+          ctx.fillStyle = 'rgba(0,0,0,0.15)'
+          ctx.beginPath()
+          ctx.arc(cx, cy, cr, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.fillStyle = 'rgba(255,255,255,0.05)'
+          ctx.beginPath()
+          ctx.arc(cx - 1, cy - 1, cr * 0.6, 0, Math.PI * 2)
+          ctx.fill()
+        }
+        
+        // Boot print impression (subtle)
+        ctx.strokeStyle = 'rgba(50,50,55,0.3)'
+        ctx.lineWidth = 1
+        ctx.strokeRect(30, 40, 25, 48)
         
       } else {
         // CLASSIC: The "Neon Grid" look
@@ -588,6 +898,30 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
   const floorTexture = createFloorTexture(currentMapConfig.theme)
 
+  // Create shared tile materials (2 for checkered pattern) instead of one per tile
+  const baseColor = currentMapConfig.colors.ground
+  const tileMatLight = new StandardMaterial('tileMat-light', scene)
+  tileMatLight.diffuseTexture = floorTexture
+  tileMatLight.diffuseColor = baseColor
+  tileMatLight.specularColor = new Color3(0.05, 0.05, 0.05)
+
+  const tileMatDark = new StandardMaterial('tileMat-dark', scene)
+  tileMatDark.diffuseTexture = floorTexture
+  tileMatDark.diffuseColor = baseColor.scale(0.85)
+  tileMatDark.specularColor = new Color3(0.05, 0.05, 0.05)
+
+  // Shared wall-decoration materials (avoid per-tile material creation)
+  const sharedCanopyMat = new StandardMaterial('canopyMat-shared', scene)
+  sharedCanopyMat.diffuseColor = new Color3(0.15, 0.5, 0.1)
+  sharedCanopyMat.specularColor = new Color3(0.05, 0.05, 0.05)
+  const sharedLavaGlowMat = new StandardMaterial('lavaGlow-shared', scene)
+  sharedLavaGlowMat.emissiveColor = new Color3(0.8, 0.2, 0)
+  sharedLavaGlowMat.diffuseColor = new Color3(0, 0, 0)
+  sharedLavaGlowMat.alpha = 0.5
+  const sharedAntennaMat = new StandardMaterial('antenna-shared', scene)
+  sharedAntennaMat.diffuseColor = new Color3(0.5, 0.5, 0.55)
+  sharedAntennaMat.emissiveColor = new Color3(0, 0.1, 0.15)
+
   // Create floor tiles individually for better grid visibility
   // Use grid.length to include padding rows
   for (let y = 0; y < grid.length; y++) {
@@ -602,50 +936,325 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       tile.position.x = pos.x
       tile.position.z = pos.z
       tile.receiveShadows = true
-      
-      const tileMat = new StandardMaterial(`tileMat-${x}-${y}`, scene)
-      tileMat.diffuseTexture = floorTexture
-      
-      // Blend texture with theme color
-      const baseColor = currentMapConfig.colors.ground
-      if (isCheckered) {
-        tileMat.diffuseColor = baseColor
-      } else {
-        tileMat.diffuseColor = baseColor.scale(0.85) // Subtle darker shade
-      }
-      
-      tileMat.specularColor = new Color3(0.05, 0.05, 0.05) // Reduce specularity for matte stone look
-      tile.material = tileMat
+      tile.material = isCheckered ? tileMatLight : tileMatDark
 
       if (grid[y][x] === 'wall') {
-        const wall = MeshBuilder.CreateBox(`wall-${x}-${y}`, { 
-          width: TILE_SIZE * 0.9, 
-          height: TILE_SIZE * 1.2, 
-          depth: TILE_SIZE * 0.9 
-        }, scene)
-        wall.position.x = pos.x
-        wall.position.y = TILE_SIZE * 0.6
-        wall.position.z = pos.z
-        wall.material = wallMaterial
-        shadowGenerator.addShadowCaster(wall)
-        wall.receiveShadows = true
+        const isBorder = x === 0 || y === 0 || x === GRID_WIDTH - 1 || y === GRID_HEIGHT - 1
         
-        // Base is part of the wall now visually, or purely optional. 
-        // Let's remove separate base mesh to clean up visual noise and z-fighting
+        if (theme === 'forest') {
+          // Forest: tree trunks for inner pillars, hedge wall for borders
+          if (isBorder) {
+            const wall = MeshBuilder.CreateBox(`wall-${x}-${y}`, { 
+              width: TILE_SIZE * 0.95, height: TILE_SIZE * 1.0, depth: TILE_SIZE * 0.95 
+            }, scene)
+            wall.position.x = pos.x
+            wall.position.y = TILE_SIZE * 0.5
+            wall.position.z = pos.z
+            wall.material = wallMaterial
+            shadowGenerator.addShadowCaster(wall)
+            wall.receiveShadows = true
+          } else {
+            // Tree trunk
+            const trunk = MeshBuilder.CreateCylinder(`wall-${x}-${y}`, {
+              diameter: TILE_SIZE * 0.45, height: TILE_SIZE * 1.6, tessellation: 8
+            }, scene)
+            trunk.position.x = pos.x
+            trunk.position.y = TILE_SIZE * 0.8
+            trunk.position.z = pos.z
+            trunk.material = wallMaterial
+            shadowGenerator.addShadowCaster(trunk)
+            trunk.receiveShadows = true
+            // Tree canopy
+            const canopy = MeshBuilder.CreateSphere(`canopy-${x}-${y}`, {
+              diameter: TILE_SIZE * 0.9, segments: 6
+            }, scene)
+            canopy.position.x = pos.x
+            canopy.position.y = TILE_SIZE * 1.55
+            canopy.position.z = pos.z
+            canopy.scaling = new Vector3(1, 0.7, 1)
+            canopy.material = sharedCanopyMat
+            shadowGenerator.addShadowCaster(canopy)
+          }
+        } else if (theme === 'ice') {
+          // Ice: crystal pillars for inner, frozen wall for borders
+          if (isBorder) {
+            const wall = MeshBuilder.CreateBox(`wall-${x}-${y}`, { 
+              width: TILE_SIZE * 0.95, height: TILE_SIZE * 1.1, depth: TILE_SIZE * 0.95 
+            }, scene)
+            wall.position.x = pos.x
+            wall.position.y = TILE_SIZE * 0.55
+            wall.position.z = pos.z
+            wall.material = wallMaterial
+            shadowGenerator.addShadowCaster(wall)
+            wall.receiveShadows = true
+          } else {
+            // Ice crystal - tapered cylinder
+            const crystal = MeshBuilder.CreateCylinder(`wall-${x}-${y}`, {
+              diameterTop: TILE_SIZE * 0.3, diameterBottom: TILE_SIZE * 0.65,
+              height: TILE_SIZE * 1.5, tessellation: 6
+            }, scene)
+            crystal.position.x = pos.x
+            crystal.position.y = TILE_SIZE * 0.75
+            crystal.position.z = pos.z
+            crystal.rotation.y = Math.random() * Math.PI
+            crystal.material = wallMaterial
+            shadowGenerator.addShadowCaster(crystal)
+            crystal.receiveShadows = true
+          }
+        } else if (theme === 'lava') {
+          // Lava: rocky pillars, taller with rough feel
+          const h = isBorder ? TILE_SIZE * 1.3 : TILE_SIZE * 1.5
+          const wall = MeshBuilder.CreateBox(`wall-${x}-${y}`, { 
+            width: TILE_SIZE * 0.88, height: h, depth: TILE_SIZE * 0.88 
+          }, scene)
+          wall.position.x = pos.x
+          wall.position.y = h * 0.5
+          wall.position.z = pos.z
+          if (!isBorder) {
+            // Slight random rotation for organic rock feel
+            wall.rotation.y = Math.random() * 0.3 - 0.15
+          }
+          wall.material = wallMaterial
+          shadowGenerator.addShadowCaster(wall)
+          wall.receiveShadows = true
+          // Magma glow at base for inner pillars
+          if (!isBorder) {
+            const glow = MeshBuilder.CreateDisc(`lavaglow-${x}-${y}`, {
+              radius: TILE_SIZE * 0.35, tessellation: 8
+            }, scene)
+            glow.rotation.x = Math.PI / 2
+            glow.position.x = pos.x
+            glow.position.y = 0.03
+            glow.position.z = pos.z
+            glow.material = sharedLavaGlowMat
+          }
+        } else if (theme === 'space') {
+          // Space: metal panels, taller for inner
+          const h = isBorder ? TILE_SIZE * 1.1 : TILE_SIZE * 1.3
+          const wall = MeshBuilder.CreateBox(`wall-${x}-${y}`, { 
+            width: TILE_SIZE * 0.9, height: h, depth: TILE_SIZE * 0.9 
+          }, scene)
+          wall.position.x = pos.x
+          wall.position.y = h * 0.5
+          wall.position.z = pos.z
+          wall.material = wallMaterial
+          shadowGenerator.addShadowCaster(wall)
+          wall.receiveShadows = true
+          // Antenna on some inner pillars
+          if (!isBorder && Math.random() < 0.3) {
+            const ant = MeshBuilder.CreateCylinder(`ant-${x}-${y}`, {
+              diameter: 0.04, height: TILE_SIZE * 0.5, tessellation: 4
+            }, scene)
+            ant.position.x = pos.x
+            ant.position.y = h + TILE_SIZE * 0.25
+            ant.position.z = pos.z
+            ant.material = sharedAntennaMat
+          }
+        } else if (theme === 'moon') {
+          // Moon: rounded rocks
+          if (isBorder) {
+            const wall = MeshBuilder.CreateBox(`wall-${x}-${y}`, { 
+              width: TILE_SIZE * 0.93, height: TILE_SIZE * 1.0, depth: TILE_SIZE * 0.93 
+            }, scene)
+            wall.position.x = pos.x
+            wall.position.y = TILE_SIZE * 0.5
+            wall.position.z = pos.z
+            wall.material = wallMaterial
+            shadowGenerator.addShadowCaster(wall)
+            wall.receiveShadows = true
+          } else {
+            // Irregular moon rock (stretched sphere)
+            const rock = MeshBuilder.CreateSphere(`wall-${x}-${y}`, {
+              diameter: TILE_SIZE * 0.85, segments: 5
+            }, scene)
+            rock.position.x = pos.x
+            rock.position.y = TILE_SIZE * 0.4
+            rock.position.z = pos.z
+            rock.scaling = new Vector3(
+              0.9 + Math.random() * 0.2,
+              0.6 + Math.random() * 0.4,
+              0.9 + Math.random() * 0.2
+            )
+            rock.rotation.y = Math.random() * Math.PI
+            rock.material = wallMaterial
+            shadowGenerator.addShadowCaster(rock)
+            rock.receiveShadows = true
+          }
+        } else {
+          // Classic: standard stone block wall
+          const wall = MeshBuilder.CreateBox(`wall-${x}-${y}`, { 
+            width: TILE_SIZE * 0.9, 
+            height: TILE_SIZE * 1.2, 
+            depth: TILE_SIZE * 0.9 
+          }, scene)
+          wall.position.x = pos.x
+          wall.position.y = TILE_SIZE * 0.6
+          wall.position.z = pos.z
+          wall.material = wallMaterial
+          shadowGenerator.addShadowCaster(wall)
+          wall.receiveShadows = true
+        }
       } else if (grid[y][x] === 'destructible') {
-        // Create a BARREL or CRATE instead of a generic box
-        const destructible = MeshBuilder.CreateBox(`destructible-${x}-${y}`, { 
-          size: TILE_SIZE * 0.8
-        }, scene)
+        let destructible: any
         
-        destructible.position.x = pos.x
-        destructible.position.y = TILE_SIZE * 0.4
-        destructible.position.z = pos.z
-        destructible.material = crateMaterial // Use distinct texture
+        if (theme === 'forest') {
+          // Forest: bush (flattened sphere)
+          destructible = MeshBuilder.CreateSphere(`destructible-${x}-${y}`, {
+            diameter: TILE_SIZE * 0.75, segments: 6
+          }, scene)
+          destructible.scaling = new Vector3(1, 0.7, 1)
+          destructible.position.x = pos.x
+          destructible.position.y = TILE_SIZE * 0.3
+          destructible.position.z = pos.z
+        } else if (theme === 'ice') {
+          // Ice: ice block (box, slightly irregular)
+          destructible = MeshBuilder.CreateBox(`destructible-${x}-${y}`, {
+            width: TILE_SIZE * 0.75, height: TILE_SIZE * 0.7, depth: TILE_SIZE * 0.75
+          }, scene)
+          destructible.position.x = pos.x
+          destructible.position.y = TILE_SIZE * 0.35
+          destructible.position.z = pos.z
+          destructible.rotation.y = Math.random() * 0.3 - 0.15
+        } else if (theme === 'lava') {
+          // Lava: volcanic rock (slightly rounded box)
+          destructible = MeshBuilder.CreateBox(`destructible-${x}-${y}`, {
+            width: TILE_SIZE * 0.72, height: TILE_SIZE * 0.65, depth: TILE_SIZE * 0.72
+          }, scene)
+          destructible.position.x = pos.x
+          destructible.position.y = TILE_SIZE * 0.33
+          destructible.position.z = pos.z
+          destructible.rotation.y = Math.random() * 0.5 - 0.25
+        } else if (theme === 'moon') {
+          // Moon: dust mound (flattened sphere)
+          destructible = MeshBuilder.CreateSphere(`destructible-${x}-${y}`, {
+            diameter: TILE_SIZE * 0.7, segments: 5
+          }, scene)
+          destructible.scaling = new Vector3(1, 0.55, 1)
+          destructible.position.x = pos.x
+          destructible.position.y = TILE_SIZE * 0.2
+          destructible.position.z = pos.z
+        } else {
+          // Classic / Space: crate box
+          destructible = MeshBuilder.CreateBox(`destructible-${x}-${y}`, { 
+            size: TILE_SIZE * 0.8
+          }, scene)
+          destructible.position.x = pos.x
+          destructible.position.y = TILE_SIZE * 0.4
+          destructible.position.z = pos.z
+        }
         
+        destructible.material = crateMaterial
         destructibleMeshes.set(`${x},${y}`, destructible)
         shadowGenerator.addShadowCaster(destructible)
         destructible.receiveShadows = true
+      }
+    }
+  }
+
+  // ── Theme-specific decorations (shared materials to minimize draw calls) ──
+  if (theme === 'forest') {
+    const mushMatRed = new StandardMaterial('mushMat-red', scene)
+    mushMatRed.diffuseColor = new Color3(0.8, 0.2, 0.15)
+    mushMatRed.specularColor = new Color3(0.05, 0.05, 0.05)
+    const mushMatYellow = new StandardMaterial('mushMat-yellow', scene)
+    mushMatYellow.diffuseColor = new Color3(0.9, 0.85, 0.3)
+    mushMatYellow.specularColor = new Color3(0.05, 0.05, 0.05)
+    for (let y = 1; y < GRID_HEIGHT - 1; y++) {
+      for (let x = 1; x < GRID_WIDTH - 1; x++) {
+        if (grid[y][x] === 'empty' && Math.random() < 0.08) {
+          const pos = gridToWorld(x, y)
+          const mush = MeshBuilder.CreateCylinder(`mush-${x}-${y}`, {
+            diameterTop: TILE_SIZE * 0.22, diameterBottom: TILE_SIZE * 0.06,
+            height: TILE_SIZE * 0.15, tessellation: 6
+          }, scene)
+          mush.position.x = pos.x + (Math.random() - 0.5) * 0.3
+          mush.position.y = TILE_SIZE * 0.08
+          mush.position.z = pos.z + (Math.random() - 0.5) * 0.3
+          mush.material = Math.random() < 0.5 ? mushMatRed : mushMatYellow
+        }
+      }
+    }
+  } else if (theme === 'lava') {
+    const poolMat = new StandardMaterial('lpool-shared', scene)
+    poolMat.emissiveColor = new Color3(0.9, 0.3, 0)
+    poolMat.diffuseColor = new Color3(0.6, 0.15, 0)
+    poolMat.alpha = 0.7
+    for (let y = 1; y < GRID_HEIGHT - 1; y++) {
+      for (let x = 1; x < GRID_WIDTH - 1; x++) {
+        if (grid[y][x] === 'empty' && Math.random() < 0.04) {
+          const pos = gridToWorld(x, y)
+          const pool = MeshBuilder.CreateDisc(`lpool-${x}-${y}`, {
+            radius: TILE_SIZE * 0.25, tessellation: 8
+          }, scene)
+          pool.rotation.x = Math.PI / 2
+          pool.position.x = pos.x
+          pool.position.y = 0.015
+          pool.position.z = pos.z
+          pool.material = poolMat
+        }
+      }
+    }
+  } else if (theme === 'ice') {
+    const shardMat = new StandardMaterial('shard-shared', scene)
+    shardMat.diffuseColor = new Color3(0.7, 0.85, 0.95)
+    shardMat.specularColor = new Color3(0.8, 0.8, 0.9)
+    shardMat.alpha = 0.7
+    for (let y = 1; y < GRID_HEIGHT - 1; y++) {
+      for (let x = 1; x < GRID_WIDTH - 1; x++) {
+        if (grid[y][x] === 'empty' && Math.random() < 0.06) {
+          const pos = gridToWorld(x, y)
+          const shard = MeshBuilder.CreateCylinder(`shard-${x}-${y}`, {
+            diameterTop: 0, diameterBottom: TILE_SIZE * 0.1,
+            height: TILE_SIZE * 0.25, tessellation: 4
+          }, scene)
+          shard.position.x = pos.x + (Math.random() - 0.5) * 0.3
+          shard.position.y = TILE_SIZE * 0.12
+          shard.position.z = pos.z + (Math.random() - 0.5) * 0.3
+          shard.rotation.x = (Math.random() - 0.5) * 0.4
+          shard.rotation.z = (Math.random() - 0.5) * 0.4
+          shard.material = shardMat
+        }
+      }
+    }
+  } else if (theme === 'space') {
+    const slMatCyan = new StandardMaterial('sl-cyan', scene)
+    slMatCyan.emissiveColor = new Color3(0, 0.6, 0.8)
+    slMatCyan.diffuseColor = new Color3(0, 0, 0)
+    const slMatPurple = new StandardMaterial('sl-purple', scene)
+    slMatPurple.emissiveColor = new Color3(0.6, 0, 0.8)
+    slMatPurple.diffuseColor = new Color3(0, 0, 0)
+    for (let y = 1; y < GRID_HEIGHT - 1; y++) {
+      for (let x = 1; x < GRID_WIDTH - 1; x++) {
+        if (grid[y][x] === 'empty' && Math.random() < 0.05) {
+          const pos = gridToWorld(x, y)
+          const sLight = MeshBuilder.CreateDisc(`slight-${x}-${y}`, {
+            radius: TILE_SIZE * 0.08, tessellation: 6
+          }, scene)
+          sLight.rotation.x = Math.PI / 2
+          sLight.position.x = pos.x
+          sLight.position.y = 0.015
+          sLight.position.z = pos.z
+          sLight.material = Math.random() < 0.5 ? slMatCyan : slMatPurple
+        }
+      }
+    }
+  } else if (theme === 'moon') {
+    const pebMat = new StandardMaterial('peb-shared', scene)
+    pebMat.diffuseColor = new Color3(0.45, 0.45, 0.48)
+    pebMat.specularColor = new Color3(0.05, 0.05, 0.05)
+    for (let y = 1; y < GRID_HEIGHT - 1; y++) {
+      for (let x = 1; x < GRID_WIDTH - 1; x++) {
+        if (grid[y][x] === 'empty' && Math.random() < 0.07) {
+          const pos = gridToWorld(x, y)
+          const pebble = MeshBuilder.CreateSphere(`peb-${x}-${y}`, {
+            diameter: TILE_SIZE * 0.08, segments: 3
+          }, scene)
+          pebble.position.x = pos.x + (Math.random() - 0.5) * 0.4
+          pebble.position.y = TILE_SIZE * 0.04
+          pebble.position.z = pos.z + (Math.random() - 0.5) * 0.4
+          pebble.scaling.y = 0.5
+          pebble.material = pebMat
+        }
       }
     }
   }
@@ -657,28 +1266,39 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     // Parent mesh (pivot)
     const root = new TransformNode(name + '-root', scene)
     
-    // Main body material using the player color
+    // ── Materials ──
     const bodyMat = new StandardMaterial(name + '-bodyMat', scene)
     bodyMat.diffuseColor = Color3.FromHexString(colorHex)
-    bodyMat.specularColor = new Color3(0.1, 0.1, 0.1)
-    
-    // Skin/Face material
+    bodyMat.specularColor = new Color3(0.3, 0.3, 0.3)
+    bodyMat.specularPower = 16
+
     const skinMat = new StandardMaterial(name + '-skinMat', scene)
-    skinMat.diffuseColor = new Color3(1, 0.8, 0.6) // Peach/Skin
-    skinMat.specularColor = new Color3(0, 0, 0)
+    skinMat.diffuseColor = new Color3(1.0, 0.85, 0.72)
+    skinMat.specularColor = new Color3(0.05, 0.05, 0.05)
 
-    // Dark material for eyes/limbs
     const darkMat = new StandardMaterial(name + '-darkMat', scene)
-    darkMat.diffuseColor = new Color3(0.1, 0.1, 0.1)
+    darkMat.diffuseColor = new Color3(0.08, 0.08, 0.08)
+    darkMat.specularColor = new Color3(0.2, 0.2, 0.2)
 
-    // White for eye shine
     const whiteMat = new StandardMaterial(name + '-whiteMat', scene)
     whiteMat.diffuseColor = new Color3(1, 1, 1)
-    whiteMat.emissiveColor = new Color3(1, 1, 1)
+    whiteMat.emissiveColor = new Color3(0.6, 0.6, 0.6)
 
-    // Create 3D character mesh based on settings
-    // Default shape to sphere if strict match isn't found, 
-    // but try to respect settingsManager if it's the player
+    const shoeMat = new StandardMaterial(name + '-shoeMat', scene)
+    shoeMat.diffuseColor = new Color3(0.25, 0.15, 0.1)
+    shoeMat.specularColor = new Color3(0.15, 0.15, 0.15)
+
+    // Brighter version of body color for accents
+    const accent = Color3.FromHexString(colorHex)
+    const accentMat = new StandardMaterial(name + '-accentMat', scene)
+    accentMat.diffuseColor = new Color3(
+      Math.min(1, accent.r * 1.3 + 0.15),
+      Math.min(1, accent.g * 1.3 + 0.15),
+      Math.min(1, accent.b * 1.3 + 0.15)
+    )
+    accentMat.specularColor = new Color3(0.2, 0.2, 0.2)
+
+    // Shape selection (cat/dog/classic)
     let shape = 'sphere'
     if (name === 'player') {
       shape = settingsManager.getSettings().characterShape || 'sphere'
@@ -688,243 +1308,375 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       shape = ['sphere', 'cat', 'dog'][Math.floor(Math.random() * 3)]
     }
 
-    // BODY (Sphere-like)
-    let body: any
+    const T = TILE_SIZE
+
+    // ── TORSO ──
+    const torso = MeshBuilder.CreateCylinder(name + '-torso', {
+      height: T * 0.3, diameterTop: T * 0.34, diameterBottom: T * 0.38, tessellation: 12
+    }, scene)
+    torso.position.y = T * 0.28
+    torso.material = bodyMat
+    torso.parent = root
+
+    // Belt / waist accent stripe
+    const belt = MeshBuilder.CreateTorus(name + '-belt', {
+      diameter: T * 0.37, thickness: T * 0.04, tessellation: 16
+    }, scene)
+    belt.position.y = T * 0.17
+    belt.material = accentMat
+    belt.parent = root
+
+    // ── HEAD ──
     let head: any
     let ears: any[] = []
-    let tail: any
 
-    body = MeshBuilder.CreateSphere(name + '-body', { diameter: TILE_SIZE * 0.5 }, scene)
-    body.position.y = TILE_SIZE * 0.25
-    body.material = bodyMat
-    body.parent = root
-
-    // HEAD
     if (shape === 'cat') {
-        head = MeshBuilder.CreateSphere(name + '-head', { diameter: TILE_SIZE * 0.4 }, scene)
-        
-        // Pointy ears (Cones) - more visible
-        const ear1 = MeshBuilder.CreateCylinder(name + '-ear1', { height: 0.2, diameterTop: 0.0, diameterBottom: 0.15, tessellation: 3 }, scene)
-        ear1.material = bodyMat 
-        ear1.position = new Vector3(-0.12, 0.2, 0)
-        ear1.rotation.z = 0.4
-        ear1.parent = head
-        
-        const ear2 = MeshBuilder.CreateCylinder(name + '-ear2', { height: 0.2, diameterTop: 0.0, diameterBottom: 0.15, tessellation: 3 }, scene)
-        ear2.material = bodyMat
-        ear2.position = new Vector3(0.12, 0.2, 0)
-        ear2.rotation.z = -0.4
-        ear2.parent = head
-        
-        ears.push(ear1, ear2)
-        
-        // Whiskers (thin cylinders)
-        const whiskerLeft = MeshBuilder.CreateCylinder(name + '-whiskerL', { height: 0.3, diameter: 0.02 }, scene)
-        whiskerLeft.rotation.z = Math.PI / 2
-        whiskerLeft.position = new Vector3(-0.15, -0.05, 0.15)
-        whiskerLeft.material = darkMat
-        whiskerLeft.parent = head
+      head = MeshBuilder.CreateSphere(name + '-head', { diameter: T * 0.38, segments: 10 }, scene)
+      head.material = skinMat
 
-        const whiskerRight = MeshBuilder.CreateCylinder(name + '-whiskerR', { height: 0.3, diameter: 0.02 }, scene)
-        whiskerRight.rotation.z = Math.PI / 2
-        whiskerRight.position = new Vector3(0.15, -0.05, 0.15)
-        whiskerRight.material = darkMat
-        whiskerRight.parent = head
+      // Pointed ears
+      for (const side of [-1, 1]) {
+        const ear = MeshBuilder.CreateCylinder(name + '-ear' + side, {
+          height: 0.18, diameterTop: 0, diameterBottom: 0.14, tessellation: 4
+        }, scene)
+        ear.material = bodyMat
+        ear.position = new Vector3(side * 0.11, 0.18, 0)
+        ear.rotation.z = side * 0.35
+        ear.parent = head
 
-        // Tail
-        tail = MeshBuilder.CreateCylinder(name + '-tail', { height: 0.4, diameter: 0.05 }, scene)
-        tail.material = bodyMat
-        tail.position = new Vector3(0, 0.1, -0.25)
-        tail.rotation.x = Math.PI / 3
-        tail.parent = root 
+        // Inner ear pink
+        const earInner = MeshBuilder.CreateCylinder(name + '-earIn' + side, {
+          height: 0.12, diameterTop: 0, diameterBottom: 0.08, tessellation: 4
+        }, scene)
+        const pinkMat = new StandardMaterial(name + '-pinkMat', scene)
+        pinkMat.diffuseColor = new Color3(1, 0.65, 0.7)
+        pinkMat.specularColor = new Color3(0, 0, 0)
+        earInner.material = pinkMat
+        earInner.position.y = 0.01
+        earInner.parent = ear
+        ears.push(ear)
+      }
+
+      // Whiskers
+      for (const side of [-1, 1]) {
+        for (const yOff of [-0.02, 0.02]) {
+          const whisker = MeshBuilder.CreateCylinder(name + '-wh' + side + yOff, {
+            height: 0.22, diameter: 0.012
+          }, scene)
+          whisker.rotation.z = Math.PI / 2
+          whisker.rotation.y = side * 0.25
+          whisker.position = new Vector3(side * 0.13, -0.03 + yOff, 0.14)
+          whisker.material = darkMat
+          whisker.parent = head
+        }
+      }
+
+      // Small nose triangle
+      const nose = MeshBuilder.CreateSphere(name + '-catNose', { diameter: 0.05 }, scene)
+      const noseMat = new StandardMaterial(name + '-noseMat', scene)
+      noseMat.diffuseColor = new Color3(1, 0.5, 0.55)
+      noseMat.specularColor = new Color3(0, 0, 0)
+      nose.material = noseMat
+      nose.position = new Vector3(0, -0.04, 0.17)
+      nose.scaling.z = 0.6
+      nose.parent = head
 
     } else if (shape === 'dog') {
-        head = MeshBuilder.CreateSphere(name + '-head', { diameter: TILE_SIZE * 0.4 }, scene)
-        
-        // Floppy ears (Hanging down)
-        // Rotate nearly 180 degrees (Math.PI) to hang down, with slight offset
-        const ear1 = MeshBuilder.CreateBox(name + '-ear1', { width: 0.1, height: 0.35, depth: 0.05 }, scene)
-        ear1.material = bodyMat 
-        ear1.position = new Vector3(-0.2, 0.1, 0) // Attach higher on head
-        ear1.rotation.z = Math.PI - 0.3 // Hangs down and out
-        ear1.parent = head
-        
-        const ear2 = MeshBuilder.CreateBox(name + '-ear2', { width: 0.1, height: 0.35, depth: 0.05 }, scene)
-        ear2.material = bodyMat
-        ear2.position = new Vector3(0.2, 0.1, 0)
-        ear2.rotation.z = -(Math.PI - 0.3)
-        ear2.parent = head
-        
-        ears.push(ear1, ear2)
-        
-        // Snout - Longer and narrower (Dog-like)
-        const snout = MeshBuilder.CreateBox(name + '-snout', { width: 0.16, height: 0.12, depth: 0.22 }, scene)
-        snout.material = skinMat // Or bodyMat? skinMat provides contrast.
-        snout.position = new Vector3(0, -0.05, 0.2) // Further out
-        snout.parent = head
-        
-        // Nose Tip (Black button nose)
-        const nose = MeshBuilder.CreateSphere(name + '-nose', { diameter: 0.08 }, scene)
-        nose.material = darkMat
-        nose.position = new Vector3(0, 0, 0.11) // Relative to snout center (depth/2)
-        nose.parent = snout
+      head = MeshBuilder.CreateSphere(name + '-head', { diameter: T * 0.38, segments: 10 }, scene)
+      head.material = skinMat
 
-        // Tail
-        tail = MeshBuilder.CreateCylinder(name + '-tail', { height: 0.35, diameter: 0.06 }, scene)
-        tail.material = bodyMat
-        tail.position = new Vector3(0, 0.1, -0.25)
-        tail.rotation.x = Math.PI / 4
-        tail.parent = root
+      // Floppy ears
+      for (const side of [-1, 1]) {
+        const ear = MeshBuilder.CreateBox(name + '-ear' + side, {
+          width: 0.1, height: 0.28, depth: 0.06
+        }, scene)
+        ear.material = bodyMat
+        ear.position = new Vector3(side * 0.18, 0.06, -0.02)
+        ear.rotation.z = side * (Math.PI - 0.35)
+        ear.parent = head
+        ears.push(ear)
+      }
+
+      // Snout
+      const snout = MeshBuilder.CreateCylinder(name + '-snout', {
+        height: 0.18, diameterTop: 0.1, diameterBottom: 0.14, tessellation: 8
+      }, scene)
+      snout.rotation.x = Math.PI / 2
+      snout.position = new Vector3(0, -0.04, 0.19)
+      snout.material = skinMat
+      snout.parent = head
+
+      // Nose
+      const nose = MeshBuilder.CreateSphere(name + '-dogNose', { diameter: 0.07 }, scene)
+      nose.material = darkMat
+      nose.position = new Vector3(0, -0.02, 0.28)
+      nose.parent = head
+
+      // Tongue
+      const tongue = MeshBuilder.CreateBox(name + '-tongue', { width: 0.04, height: 0.08, depth: 0.02 }, scene)
+      const tongueMat = new StandardMaterial(name + '-tongueMat', scene)
+      tongueMat.diffuseColor = new Color3(1, 0.4, 0.45)
+      tongueMat.specularColor = new Color3(0.3, 0.1, 0.1)
+      tongue.material = tongueMat
+      tongue.position = new Vector3(0, -0.1, 0.2)
+      tongue.parent = head
 
     } else {
-        // Classic Sphere
-        head = MeshBuilder.CreateSphere(name + '-head', { diameter: TILE_SIZE * 0.4 }, scene)
-    }
+      // ── Classic humanoid head ──
+      head = MeshBuilder.CreateSphere(name + '-head', { diameter: T * 0.36, segments: 10 }, scene)
+      head.material = skinMat
 
-    head.position.y = TILE_SIZE * 0.6
-    head.material = skinMat
-    head.parent = root
-
-    // HELMET/HAT (Only for classic or if requested, let's keep it simple for animals)
-    if (shape === 'sphere') {
-      const helmet = MeshBuilder.CreateSphere(name + '-helmet', { diameter: TILE_SIZE * 0.42, slice: 0.5 }, scene)
+      // Helmet / hair cap
+      const helmet = MeshBuilder.CreateSphere(name + '-helmet', { diameter: T * 0.38, slice: 0.5 }, scene)
       helmet.rotation.x = Math.PI
-      helmet.position.y = 0
+      helmet.position.y = 0.02
       helmet.material = bodyMat
       helmet.parent = head
+
+      // Mouth (tiny smile)
+      const mouth = MeshBuilder.CreateTorus(name + '-mouth', {
+        diameter: 0.07, thickness: 0.015, tessellation: 12
+      }, scene)
+      mouth.material = darkMat
+      mouth.position = new Vector3(0, -0.06, 0.15)
+      mouth.rotation.x = -0.3
+      mouth.scaling = new Vector3(1, 0.5, 0.5)
+      mouth.parent = head
     }
 
-    // EYES
-    const leftEye = MeshBuilder.CreateSphere(name + '-leftEye', { diameter: TILE_SIZE * 0.1 }, scene)
-    let eyeZ = 0.15 * TILE_SIZE
-    if (shape === 'dog') eyeZ += 0.08 * TILE_SIZE // Move eyes further forward for dog
-    
-    leftEye.position = new Vector3(-0.08 * TILE_SIZE, 0.08 * TILE_SIZE, eyeZ) // Wider set eyes
-    leftEye.scaling.z = 0.5
-    leftEye.material = darkMat
-    leftEye.parent = head
+    head.position.y = T * 0.56
+    head.parent = root
 
-    const rightEye = MeshBuilder.CreateSphere(name + '-rightEye', { diameter: TILE_SIZE * 0.1 }, scene)
-    rightEye.position = new Vector3(0.08 * TILE_SIZE, 0.08 * TILE_SIZE, eyeZ)
-    rightEye.scaling.z = 0.5
-    rightEye.material = darkMat
-    rightEye.parent = head
+    // ── EYES ──  (white sclera + dark pupil + tiny white shine)
+    const eyeSpread = shape === 'dog' ? 0.085 : 0.07
+    const eyeForward = shape === 'dog' ? 0.17 : 0.14
+    const eyeHeight = shape === 'cat' ? 0.03 : 0.04
 
-    // Add the number/identifier if enemy
-    if (name.includes('enemy')) {
-       // Simple geometry for enemy number? Or just skip it for now and rely on color
-       // Let's make eyes glow red for enemies
-       leftEye.material = new StandardMaterial(name + '-eyeMat', scene)
-       ;(leftEye.material as StandardMaterial).emissiveColor = new Color3(0.8, 0, 0)
-       rightEye.material = leftEye.material
+    for (const side of [-1, 1]) {
+      // Sclera (white)
+      const sclera = MeshBuilder.CreateSphere(name + '-sclera' + side, { diameter: T * 0.1, segments: 8 }, scene)
+      sclera.position = new Vector3(side * eyeSpread * T, eyeHeight * T, eyeForward * T)
+      sclera.scaling.z = 0.55
+      sclera.material = whiteMat
+      sclera.parent = head
+
+      // Pupil
+      const pupil = MeshBuilder.CreateSphere(name + '-pupil' + side, { diameter: T * 0.06, segments: 8 }, scene)
+      pupil.position = new Vector3(0, 0, 0.02)
+      pupil.scaling.z = 0.5
+      pupil.parent = sclera
+
+      if (name.includes('enemy')) {
+        // Enemies get menacing red eyes
+        const enemyEyeMat = new StandardMaterial(name + '-enemyEyeMat' + side, scene)
+        enemyEyeMat.diffuseColor = new Color3(0.9, 0.1, 0.1)
+        enemyEyeMat.emissiveColor = new Color3(0.6, 0, 0)
+        pupil.material = enemyEyeMat
+      } else {
+        pupil.material = darkMat
+      }
+
+      // Specular shine dot
+      const shine = MeshBuilder.CreateSphere(name + '-shine' + side, { diameter: T * 0.025 }, scene)
+      shine.position = new Vector3(0.01, 0.015, 0.025)
+      shine.material = whiteMat
+      shine.parent = sclera
     }
 
-    // LIMBS
-    const limbSize = TILE_SIZE * 0.15
-    
-    // Hands
-    const leftHand = MeshBuilder.CreateSphere(name + '-leftHand', { diameter: limbSize }, scene)
-    leftHand.position = new Vector3(-0.25 * TILE_SIZE, 0.3 * TILE_SIZE, 0)
-    leftHand.material = bodyMat // Gloves?
-    leftHand.parent = root
+    // ── ARMS (upper + forearm + hand) ──
+    const armParts: { upper: any; lower: any; hand: any }[] = []
+    for (const side of [-1, 1]) {
+      // Upper arm
+      const upper = MeshBuilder.CreateCylinder(name + '-upperArm' + side, {
+        height: T * 0.16, diameterTop: T * 0.08, diameterBottom: T * 0.07, tessellation: 8
+      }, scene)
+      upper.material = bodyMat
+      upper.position = new Vector3(side * T * 0.22, T * 0.36, 0)
+      upper.parent = root
 
-    const rightHand = MeshBuilder.CreateSphere(name + '-rightHand', { diameter: limbSize }, scene)
-    rightHand.position = new Vector3(0.25 * TILE_SIZE, 0.3 * TILE_SIZE, 0)
-    rightHand.material = bodyMat
-    rightHand.parent = root
+      // Forearm
+      const lower = MeshBuilder.CreateCylinder(name + '-forearm' + side, {
+        height: T * 0.14, diameterTop: T * 0.065, diameterBottom: T * 0.06, tessellation: 8
+      }, scene)
+      lower.material = skinMat
+      lower.position.y = -T * 0.14
+      lower.parent = upper
 
-    // Feet
-    const leftFoot = MeshBuilder.CreateSphere(name + '-leftFoot', { diameter: limbSize * 1.2 }, scene)
-    leftFoot.position = new Vector3(-0.15 * TILE_SIZE, 0.1 * TILE_SIZE, 0)
-    leftFoot.material = darkMat // Shoes
-    leftFoot.parent = root
+      // Hand (sphere)
+      const hand = MeshBuilder.CreateSphere(name + '-hand' + side, { diameter: T * 0.08, segments: 6 }, scene)
+      hand.material = skinMat
+      hand.position.y = -T * 0.1
+      hand.parent = lower
 
-    const rightFoot = MeshBuilder.CreateSphere(name + '-rightFoot', { diameter: limbSize * 1.2 }, scene)
-    rightFoot.position = new Vector3(0.15 * TILE_SIZE, 0.1 * TILE_SIZE, 0)
-    rightFoot.material = darkMat
-    rightFoot.parent = root
-    
-    // Animation state
+      armParts.push({ upper, lower, hand })
+    }
+
+    // ── LEGS (thigh + shin + foot) ──
+    const legParts: { thigh: any; shin: any; foot: any }[] = []
+    for (const side of [-1, 1]) {
+      // Thigh
+      const thigh = MeshBuilder.CreateCylinder(name + '-thigh' + side, {
+        height: T * 0.16, diameterTop: T * 0.1, diameterBottom: T * 0.08, tessellation: 8
+      }, scene)
+      thigh.material = bodyMat
+      thigh.position = new Vector3(side * T * 0.1, T * 0.12, 0)
+      thigh.parent = root
+
+      // Shin
+      const shin = MeshBuilder.CreateCylinder(name + '-shin' + side, {
+        height: T * 0.12, diameterTop: T * 0.07, diameterBottom: T * 0.06, tessellation: 8
+      }, scene)
+      shin.material = skinMat
+      shin.position.y = -T * 0.13
+      shin.parent = thigh
+
+      // Foot (slightly elongated box)
+      const foot = MeshBuilder.CreateBox(name + '-foot' + side, {
+        width: T * 0.09, height: T * 0.05, depth: T * 0.14
+      }, scene)
+      foot.material = shoeMat
+      foot.position = new Vector3(0, -T * 0.085, T * 0.02)
+      foot.parent = shin
+
+      legParts.push({ thigh, shin, foot })
+    }
+
+    // ── Tail (for animals) ──
+    if (shape === 'cat') {
+      const tail = MeshBuilder.CreateCylinder(name + '-tail', { height: 0.35, diameterTop: 0.02, diameterBottom: 0.05, tessellation: 6 }, scene)
+      tail.material = bodyMat
+      tail.position = new Vector3(0, T * 0.25, -T * 0.2)
+      tail.rotation.x = Math.PI / 3
+      tail.parent = root
+    } else if (shape === 'dog') {
+      const tail = MeshBuilder.CreateCylinder(name + '-tail', { height: 0.3, diameterTop: 0.03, diameterBottom: 0.06, tessellation: 6 }, scene)
+      tail.material = bodyMat
+      tail.position = new Vector3(0, T * 0.32, -T * 0.18)
+      tail.rotation.x = -Math.PI / 5
+      tail.parent = root
+    }
+
+    // ── Shadow disc under character ──
+    const shadow = MeshBuilder.CreateDisc(name + '-shadow', { radius: T * 0.2, tessellation: 12 }, scene)
+    shadow.rotation.x = Math.PI / 2
+    shadow.position.y = 0.01
+    const shadowMat = new StandardMaterial(name + '-shadowMat', scene)
+    shadowMat.diffuseColor = new Color3(0, 0, 0)
+    shadowMat.alpha = 0.35
+    shadowMat.specularColor = new Color3(0, 0, 0)
+    shadow.material = shadowMat
+    shadow.parent = root
+
+    // ── ANIMATION STATE ──
     let isMoving = false
     let animTime = 0
-    
-    // Register visual update
-    // Note: We use scene.onBeforeRenderObservable directly on the root to avoid leaking observers if disposed
+    let squashTimer = 0 // for landing / bomb-place squash
+
     const observer = scene.onBeforeRenderObservable.add(() => {
-        const dt = scene.getEngine().getDeltaTime()
-        
-        if (isMoving) {
-            // Use time-based animation for consistency across frame rates
-            // 0.012 * 16ms approx 0.2 per frame (old value)
-            animTime += dt * 0.035
-            
-            // Walking animation - swing arms forward/back (Y axis for up/down motion)
-            // Arms swing opposite to each other
-            // Use sin^2 or smoother curve if needed, but sin is generally fine for walking
-            
-            leftHand.position.y = 0.3 * TILE_SIZE + Math.sin(animTime) * 0.08 * TILE_SIZE
-            rightHand.position.y = 0.3 * TILE_SIZE + Math.sin(animTime + Math.PI) * 0.08 * TILE_SIZE
-            
-            // Feet alternate forward/back in local Z
-            leftFoot.position.z = Math.sin(animTime + Math.PI) * 0.1 * TILE_SIZE
-            rightFoot.position.z = Math.sin(animTime) * 0.1 * TILE_SIZE
-            
-            // Bob body slightly
-            body.position.y = TILE_SIZE * 0.25 + Math.abs(Math.sin(animTime * 2)) * 0.015 * TILE_SIZE
-            head.position.y = TILE_SIZE * 0.6 + Math.abs(Math.sin(animTime * 2)) * 0.015 * TILE_SIZE
-        } else {
-            // Idle animation - Breathing
-            const breathe = Math.sin(Date.now() * 0.003) * 0.01 * TILE_SIZE
-            head.position.y = TILE_SIZE * 0.6 + breathe
-            body.scaling.x = 1 + breathe * 0.5
-            
-            // Reset limbs smoothly (Lerp)
-            // Frame-rate independent lerp: a = a + (b-a) * (1 - exp(-dt * speed))
-            const lerpFactor = 1 - Math.pow(0.001, dt / 1000) 
-            
-            leftHand.position.y = leftHand.position.y + (0.3 * TILE_SIZE - leftHand.position.y) * lerpFactor
-            rightHand.position.y = rightHand.position.y + (0.3 * TILE_SIZE - rightHand.position.y) * lerpFactor
-            leftFoot.position.z = leftFoot.position.z * (1 - lerpFactor)
-            rightFoot.position.z = rightFoot.position.z * (1 - lerpFactor)
+      const dt = scene.getEngine().getDeltaTime()
+
+      // Squash-stretch recovery (used when landing or placing bomb)
+      if (squashTimer > 0) {
+        squashTimer -= dt
+        const t = Math.max(0, squashTimer / 200) // 200ms effect
+        const squash = 1 - t * 0.2
+        const stretch = 1 + t * 0.15
+        root.scaling.copyFromFloats(stretch, squash, stretch)
+        if (squashTimer <= 0) {
+          root.scaling.copyFromFloats(1, 1, 1)
         }
+      }
+
+      if (isMoving) {
+        animTime += dt * 0.014 // speed factor
+
+        const walkCycle = animTime * 6 // ~6 rad/s for a brisk walk
+
+        // ── Arms swing opposite ──
+        const armSwing = Math.sin(walkCycle) * 0.45
+        armParts[0].upper.rotation.x = armSwing
+        armParts[1].upper.rotation.x = -armSwing
+        // Forearms bend when swinging back
+        armParts[0].lower.rotation.x = Math.max(0, -armSwing) * 0.6
+        armParts[1].lower.rotation.x = Math.max(0, armSwing) * 0.6
+
+        // ── Legs swing opposite ──
+        const legSwing = Math.sin(walkCycle) * 0.4
+        legParts[0].thigh.rotation.x = -legSwing
+        legParts[1].thigh.rotation.x = legSwing
+        // Knees bend on back-swing
+        legParts[0].shin.rotation.x = Math.max(0, legSwing) * 0.5
+        legParts[1].shin.rotation.x = Math.max(0, -legSwing) * 0.5
+
+        // ── Body bob (double-frequency of steps) ──
+        const bob = Math.abs(Math.sin(walkCycle)) * T * 0.04
+        torso.position.y = T * 0.28 + bob
+        head.position.y = T * 0.56 + bob
+
+        // ── Slight torso lean forward ──
+        torso.rotation.x = 0.08
+
+        // ── Subtle body sway ──
+        torso.rotation.z = Math.sin(walkCycle) * 0.04
+        head.rotation.z = Math.sin(walkCycle) * 0.02
+
+        // ── Shadow pulse ──
+        const sBob = 1 - bob * 1.5
+        shadow.scaling.copyFromFloats(sBob, sBob, sBob)
+
+      } else {
+        // ── IDLE: gentle breathing ──
+        animTime += dt * 0.001 // accumulate for idle too
+        const breathe = Math.sin(animTime * 2.5) * T * 0.008
+        head.position.y = T * 0.56 + breathe
+        torso.position.y = T * 0.28 + breathe * 0.5
+        torso.rotation.x = 0
+        torso.rotation.z = 0
+        head.rotation.z = 0
+
+        // Gentle arm sway
+        const idleSway = Math.sin(animTime * 2.0) * 0.06
+        armParts[0].upper.rotation.x = idleSway
+        armParts[1].upper.rotation.x = -idleSway
+        armParts[0].lower.rotation.x = 0.1
+        armParts[1].lower.rotation.x = 0.1
+
+        // Legs neutral
+        legParts[0].thigh.rotation.x = 0
+        legParts[1].thigh.rotation.x = 0
+        legParts[0].shin.rotation.x = 0
+        legParts[1].shin.rotation.x = 0
+
+        shadow.scaling.copyFromFloats(1, 1, 1)
+      }
     })
-    
-    // Cleanup observer when mesh is disposed
+
     root.onDisposeObservable.add(() => {
-        scene.onBeforeRenderObservable.remove(observer)
-        bodyMat.dispose()
-        skinMat.dispose()
-        darkMat.dispose()
-        whiteMat.dispose()
+      scene.onBeforeRenderObservable.remove(observer)
+      bodyMat.dispose(); skinMat.dispose(); darkMat.dispose()
+      whiteMat.dispose(); shoeMat.dispose(); accentMat.dispose()
     })
-    
-    // Add custom method to match existing logic
+
     ;(root as any).playAnimation = (anim: string) => {
-        if (anim.startsWith('walk')) {
-            isMoving = true
-            
-            // Rotate based on direction
-            // Top-down camera view, grid Y maps to world Z
-            // walk-up = move toward top of screen = -Z direction
-            // walk-down = move toward bottom of screen = +Z direction
-            const targetRot = 
-                 anim === 'walk-up' ? -Math.PI/2 :
-                 anim === 'walk-down' ? Math.PI/2 :
-                 anim === 'walk-left' ? Math.PI :
-                 0 // walk-right
-                 
-            // Snap to rotation
-            root.rotation.y = targetRot
-            
-            // Stop moving after a short delay if no new calls come in
-            if ((root as any).stopTimer) clearTimeout((root as any).stopTimer)
-            ;(root as any).stopTimer = setTimeout(() => {
-                isMoving = false
-            }, 300)
-        }
+      if (anim.startsWith('walk')) {
+        isMoving = true
+
+        const targetRot =
+          anim === 'walk-up' ? -Math.PI / 2 :
+          anim === 'walk-down' ? Math.PI / 2 :
+          anim === 'walk-left' ? Math.PI : 0
+
+        root.rotation.y = targetRot
+
+        if ((root as any).stopTimer) clearTimeout((root as any).stopTimer)
+        ;(root as any).stopTimer = setTimeout(() => { isMoving = false }, 300)
+      }
     }
-    
-    return root as any // Cast to any to avoid type errors
+
+    // Trigger squash-stretch (called externally when placing bomb)
+    ;(root as any).triggerSquash = () => { squashTimer = 200 }
+
+    return root as any
   }
 
   const player = createPlayerSprite('player', null, '🧑', settings.player1Color)
@@ -947,6 +1699,13 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   let playerSpeed = 1
   let moveDelay = 150 // milliseconds between moves
   let lastMoveTime = 0
+  
+  // Extended power-up state (Player 1)
+  let shieldCharges = 0       // Absorbs hits (max 3)
+  let hasPierce = false        // Blasts go through destructible blocks
+  let ghostTimer = 0           // Remaining ms of ghost mode (walk through blocks)
+  let powerBombCharges = 0     // Next bomb gets +3 blast radius
+  let hasLineBomb = false       // Place row of bombs in facing direction
   
   // Smooth movement - visual position interpolates towards grid position
   let playerVisualX = playerPos.x
@@ -1016,6 +1775,13 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   let lastPlayer2Dx = 0
   let lastPlayer2Dy = -1
   
+  // Extended power-up state (Player 2)
+  let player2ShieldCharges = 0
+  let player2HasPierce = false
+  let player2GhostTimer = 0
+  let player2PowerBombCharges = 0
+  let player2HasLineBomb = false
+  
   // Player 2 smooth movement
   let player2VisualX = 0
   let player2VisualZ = 0
@@ -1040,6 +1806,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   const powerUps: PowerUp[] = []
   let gameOver = false
   let gameWon = false
+  
+  // Chain reaction tracking
+  let chainReactionCount = 0
+  let chainReactionTimer: ReturnType<typeof setTimeout> | null = null
 
   // Enemy stats (for AI) - each enemy has their own stats
   const enemyStats = enemies.map(() => ({
@@ -1056,11 +1826,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     const pauseBtn = document.createElement('div')
     pauseBtn.innerHTML = '⏸️'
     pauseBtn.style.position = 'absolute'
-    pauseBtn.style.top = '45%'
-    pauseBtn.style.right = '15px'
+    pauseBtn.style.top = '12px'
+    pauseBtn.style.right = '12px'
     pauseBtn.style.left = 'auto'
-    pauseBtn.style.width = '40px'
-    pauseBtn.style.height = '40px'
+    pauseBtn.style.width = '44px'
+    pauseBtn.style.height = '44px'
     pauseBtn.id = "mobile-pause-btn"
     pauseBtn.className = "mobile-pause-btn"
     pauseBtn.style.background = 'rgba(0,0,0,0.5)'
@@ -1090,14 +1860,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   playerUIDiv.className = 'game-ui-panel'
   playerUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-    // Bottom Left, under D-Pad controls (background for them)
-    playerUIDiv.style.bottom = '10px'
+    // Top left on mobile, compact and out of the way of controls
+    playerUIDiv.style.top = '10px'
     playerUIDiv.style.left = '10px'
-    playerUIDiv.style.top = 'auto'
+    playerUIDiv.style.bottom = 'auto'
     
-    // Scale scale small
-    playerUIDiv.style.transform = 'scale(0.8)'
-    playerUIDiv.style.transformOrigin = 'bottom left'
+    // Scale down to save space
+    playerUIDiv.style.transform = 'scale(0.75)'
+    playerUIDiv.style.transformOrigin = 'top left'
   } else {
     // PC: Centered at bottom with transparency
     playerUIDiv.style.bottom = '15px'
@@ -1137,8 +1907,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   centerUIDiv.className = 'center-ui'
   centerUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-    centerUIDiv.style.bottom = '15px'
-    centerUIDiv.style.top = 'auto'
+    // Top center on mobile, compact
+    centerUIDiv.style.top = '10px'
+    centerUIDiv.style.bottom = 'auto'
   } else {
     // PC: Keep at top center - doesn't block corners
     centerUIDiv.style.top = '10px'
@@ -1162,21 +1933,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
   // UI for opponents (top-right on PC, hidden on mobile)
   const opponentUIDiv = document.createElement('div')
-  if (isMobileDevice) {
-    opponentUIDiv.style.display = 'none' // Hide enemies stats on mobile to save space
-  }
   opponentUIDiv.className = 'game-ui-panel'
   opponentUIDiv.style.position = 'absolute'
   if (isMobileDevice) {
-      // Bottom Right, under Action Button (background for it)
-      opponentUIDiv.style.bottom = '10px'
-      opponentUIDiv.style.right = '10px'
-      opponentUIDiv.style.top = 'auto'
-      
-      // Scale down slightly
-      opponentUIDiv.style.transform = 'scale(0.8)'
-      opponentUIDiv.style.transformOrigin = 'bottom right'
-      opponentUIDiv.style.display = 'block'
+      // Hide opponent stats on mobile - controls take up the space
+      opponentUIDiv.style.display = 'none'
   } else {
       // PC: Top right but semi-transparent
       opponentUIDiv.style.top = '10px'
@@ -1210,115 +1971,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   }
   document.body.appendChild(opponentUIDiv)
 
-  // Create mobile controls if on mobile
-  if (isMobileDevice) {
-    const mobileControlsHTML = `
-      <div class="mobile-controls-container mobile-controls-visible">
-        <div class="dpad">
-          <div class="dpad-btn dpad-up" data-key="w"></div>
-          <div class="dpad-btn dpad-down" data-key="s"></div>
-          <div class="dpad-btn dpad-left" data-key="a"></div>
-          <div class="dpad-btn dpad-right" data-key="d"></div>
-        </div>
-        <div class="action-btn-container">
-          <div class="action-btn" data-key=" ">BOMB</div>
-        </div>
-      </div>
-    `
-    const controlsContainer = document.createElement('div')
-    controlsContainer.className = 'mobile-controls-wrapper'
-    controlsContainer.innerHTML = mobileControlsHTML
-    document.body.appendChild(controlsContainer.firstElementChild as HTMLElement)
-
-    // Handle resizing to toggle controls visibility
-    window.addEventListener('resize', () => {
-      const isStillMobile = isMobile()
-      const controls = document.querySelector('.mobile-controls-container') as HTMLElement
-      const pauseBtn = document.getElementById('mobile-pause-btn')
-
-      if (controls) {
-         if (isStillMobile) {
-            controls.classList.add('mobile-controls-visible')
-            if (pauseBtn) pauseBtn.style.display = 'flex'
-         } else {
-            controls.classList.remove('mobile-controls-visible')
-            if (pauseBtn) pauseBtn.style.display = 'none'
-         }
-      }
-    })
-
-    // Bind touch events
-    const dpadButtons = document.querySelectorAll('.dpad-btn')
-    const actionBtn = document.querySelector('.action-btn')
-
-    const simulateKey = (key: string, type: 'keydown' | 'keyup') => {
-      window.dispatchEvent(new KeyboardEvent(type, { key: key }))
-    }
-
-    dpadButtons.forEach(btn => {
-      const key = (btn as HTMLElement).dataset.key!
-      
-      btn.addEventListener('touchstart', (e) => {
-        e.preventDefault()
-        btn.classList.add('active')
-        simulateKey(key, 'keydown')
-      }, { passive: false })
-      
-      btn.addEventListener('touchend', (e) => {
-        e.preventDefault()
-        btn.classList.remove('active')
-        simulateKey(key, 'keyup')
-      })
-
-      // Also support mouse for testing
-      btn.addEventListener('mousedown', (e) => {
-        e.preventDefault()
-        btn.classList.add('active')
-        simulateKey(key, 'keydown')
-      })
-      btn.addEventListener('mouseup', (e) => {
-        e.preventDefault()
-        btn.classList.remove('active')
-        simulateKey(key, 'keyup')
-      })
-      btn.addEventListener('mouseleave', (e) => { // Handle dragging out
-        if (btn.classList.contains('active')) {
-            e.preventDefault()
-            btn.classList.remove('active')
-            simulateKey(key, 'keyup')   
-        }
-      })
-    })
-
-    if (actionBtn) {
-      const btn = actionBtn as HTMLElement
-      const key = " "
-      
-      btn.addEventListener('touchstart', (e) => {
-        e.preventDefault()
-        btn.classList.add('active')
-        simulateKey(key, 'keydown')
-      }, { passive: false })
-      
-      btn.addEventListener('touchend', (e) => {
-        e.preventDefault()
-        btn.classList.remove('active')
-        simulateKey(key, 'keyup') // Release logic if needed (space is usually instant but keyup good for consistency)
-      })
-
-      btn.addEventListener('mousedown', (e) => {
-        e.preventDefault()
-        btn.classList.add('active')
-        simulateKey(key, 'keydown')
-      })
-
-      btn.addEventListener('mouseup', (e) => {
-        e.preventDefault()
-        btn.classList.remove('active')
-        simulateKey(key, 'keyup')
-      })
-    }
-  }
+  // Mobile controls are created later (after keysHeld is defined) to properly
+  // interact with the game's input system rather than dispatching synthetic KeyboardEvents.
 
   function updateUI() {
     // Update center UI (timer)
@@ -1356,7 +2010,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     }
     
     // Generate powerup icons
-    const powerupIconsHTML = (bombs: number, blast: number, kick: boolean, throwAbility: boolean, speed: number) => `
+    const powerupIconsHTML = (bombs: number, blast: number, kick: boolean, throwAbility: boolean, speed: number,
+      shield: number, pierce: boolean, ghost: number, powerBomb: number, lineBomb: boolean) => {
+      let html = `
       <div style="display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap;">
         <div style="width: 36px; height: 36px; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(66, 165, 245, 0.2); border: 2px solid #42A5F5; position: relative;" title="Bombs">
           <span style="font-size: 16px;">💣</span>
@@ -1367,17 +2023,42 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           <span style="font-size: 9px; color: #FFCA28; font-weight: bold;">${blast}</span>
         </div>
         <div style="width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: ${kick ? 'rgba(76, 175, 80, 0.3)' : 'rgba(100,100,100,0.2)'}; border: 2px solid ${kick ? '#4CAF50' : '#555'}; opacity: ${kick ? '1' : '0.5'};" title="Kick">
-          <span style="font-size: 16px;">👟</span>
+          <span style="font-size: 16px;">🦶</span>
         </div>
         <div style="width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: ${throwAbility ? 'rgba(76, 175, 80, 0.3)' : 'rgba(100,100,100,0.2)'}; border: 2px solid ${throwAbility ? '#4CAF50' : '#555'}; opacity: ${throwAbility ? '1' : '0.5'};" title="Throw">
           <span style="font-size: 16px;">✋</span>
         </div>
         <div style="width: 36px; height: 36px; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0, 188, 212, 0.2); border: 2px solid #00BCD4; position: relative;" title="Speed">
-          <span style="font-size: 16px;">🚀</span>
+          <span style="font-size: 16px;">👟</span>
           <span style="font-size: 9px; color: #00BCD4; font-weight: bold;">${speed}</span>
+        </div>`
+
+      // Extended power-up icons (only shown when extended mode is on)
+      if (settings.extendedPowerUps) {
+        html += `
+        <div style="width: 36px; height: 36px; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: ${shield > 0 ? 'rgba(255, 215, 0, 0.3)' : 'rgba(100,100,100,0.2)'}; border: 2px solid ${shield > 0 ? '#ffd700' : '#555'}; opacity: ${shield > 0 ? '1' : '0.5'};" title="Shield (${shield})">
+          <span style="font-size: 16px;">🛡️</span>
+          ${shield > 0 ? `<span style="font-size: 9px; color: #ffd700; font-weight: bold;">${shield}</span>` : ''}
         </div>
-      </div>
-    `
+        <div style="width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: ${pierce ? 'rgba(255, 51, 51, 0.3)' : 'rgba(100,100,100,0.2)'}; border: 2px solid ${pierce ? '#ff3333' : '#555'}; opacity: ${pierce ? '1' : '0.5'};" title="Pierce">
+          <span style="font-size: 16px;">🔥</span>
+        </div>
+        <div style="width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: ${ghost > 0 ? 'rgba(179, 136, 255, 0.3)' : 'rgba(100,100,100,0.2)'}; border: 2px solid ${ghost > 0 ? '#b388ff' : '#555'}; opacity: ${ghost > 0 ? '1' : '0.5'};" title="Ghost${ghost > 0 ? ' (' + Math.ceil(ghost / 1000) + 's)' : ''}">
+          <span style="font-size: 16px;">👻</span>
+          ${ghost > 0 ? `<span style="font-size: 9px; color: #b388ff; font-weight: bold;">${Math.ceil(ghost / 1000)}s</span>` : ''}
+        </div>
+        <div style="width: 36px; height: 36px; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: ${powerBomb > 0 ? 'rgba(255, 102, 0, 0.3)' : 'rgba(100,100,100,0.2)'}; border: 2px solid ${powerBomb > 0 ? '#ff6600' : '#555'}; opacity: ${powerBomb > 0 ? '1' : '0.5'};" title="Power Bomb (${powerBomb})">
+          <span style="font-size: 16px;">☢️</span>
+          ${powerBomb > 0 ? `<span style="font-size: 9px; color: #ff6600; font-weight: bold;">${powerBomb}</span>` : ''}
+        </div>
+        <div style="width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: ${lineBomb ? 'rgba(255, 0, 255, 0.3)' : 'rgba(100,100,100,0.2)'}; border: 2px solid ${lineBomb ? '#ff00ff' : '#555'}; opacity: ${lineBomb ? '1' : '0.5'};" title="Line Bomb">
+          <span style="font-size: 16px;">🧨</span>
+        </div>`
+      }
+
+      html += `</div>`
+      return html
+    }
 
     playerUIDiv.innerHTML = `
       <div style="font-size: 12px; margin-bottom: 8px; color: ${settings.player1Color}; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px ${settings.player1Color}88;">Player 1</div>
@@ -1386,7 +2067,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         <span style="font-size: 14px; font-weight: bold;">${playerLives}/${difficultyConfig.playerStartingLives}</span>
       </div>
       ${healthBarHTML(playerLives, difficultyConfig.playerStartingLives)}
-      ${powerupIconsHTML(maxBombs, blastRadius, hasKick, hasThrow, playerSpeed)}
+      ${powerupIconsHTML(maxBombs, blastRadius, hasKick, hasThrow, playerSpeed, shieldCharges, hasPierce, ghostTimer, powerBombCharges, hasLineBomb)}
     `
     
     if (gameMode === 'pvp') {
@@ -1398,7 +2079,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           <span style="font-size: 14px; font-weight: bold;">${player2Lives}/4</span>
         </div>
         ${healthBarHTML(player2Lives, 4, true)}
-        ${powerupIconsHTML(player2MaxBombs, player2BlastRadius, player2HasKick, player2HasThrow, player2Speed)}
+        ${powerupIconsHTML(player2MaxBombs, player2BlastRadius, player2HasKick, player2HasThrow, player2Speed, player2ShieldCharges, player2HasPierce, player2GhostTimer, player2PowerBombCharges, player2HasLineBomb)}
       `
     } else {
       opponentUIDiv.style.borderColor = 'rgba(204, 68, 255, 0.3)'
@@ -1492,12 +2173,23 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         buttonContainer.style.display = 'flex'
         buttonContainer.style.gap = '15px'
         buttonContainer.style.marginTop = '30px'
+        if (isMobileDevice) {
+          buttonContainer.style.flexDirection = 'column'
+          buttonContainer.style.alignItems = 'center'
+        }
         
+        // Helper: make button touch-friendly
+        const touchActivate = (btn: HTMLButtonElement) => {
+          ;(btn.style as any).webkitTapHighlightColor = 'transparent'
+          btn.addEventListener('touchstart', () => btn.style.transform = 'scale(0.95)', { passive: true })
+          btn.addEventListener('touchend', () => btn.style.transform = '', { passive: true })
+        }
+
         // Restart button
         const restartBtn = document.createElement('button')
         restartBtn.innerHTML = '🔄 Play Again'
-        restartBtn.style.fontSize = '18px'
-        restartBtn.style.padding = '15px 35px'
+        restartBtn.style.fontSize = isMobileDevice ? '20px' : '18px'
+        restartBtn.style.padding = isMobileDevice ? '18px 50px' : '15px 35px'
         restartBtn.style.cursor = 'pointer'
         restartBtn.style.background = 'linear-gradient(180deg, #4CAF50 0%, #388E3C 100%)'
         restartBtn.style.color = 'white'
@@ -1505,7 +2197,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         restartBtn.style.borderRadius = '8px'
         restartBtn.style.fontFamily = "'Russo One', sans-serif"
         restartBtn.style.boxShadow = '0 4px 0 #1B5E20, 0 6px 10px rgba(0,0,0,0.3)'
-        restartBtn.style.transition = 'all 0.2s ease'
+        restartBtn.style.transition = 'all 0.15s ease'
+        if (isMobileDevice) restartBtn.style.width = '80%'
+        touchActivate(restartBtn)
         
         restartBtn.addEventListener('mouseenter', () => {
           restartBtn.style.transform = 'translateY(-2px)'
@@ -1526,8 +2220,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         // Menu button
         const menuBtn = document.createElement('button')
         menuBtn.innerHTML = '🏠 Main Menu'
-        menuBtn.style.fontSize = '18px'
-        menuBtn.style.padding = '15px 35px'
+        menuBtn.style.fontSize = isMobileDevice ? '20px' : '18px'
+        menuBtn.style.padding = isMobileDevice ? '18px 50px' : '15px 35px'
         menuBtn.style.cursor = 'pointer'
         menuBtn.style.background = 'linear-gradient(180deg, #f44336 0%, #c62828 100%)'
         menuBtn.style.color = 'white'
@@ -1535,7 +2229,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         menuBtn.style.borderRadius = '8px'
         menuBtn.style.fontFamily = "'Russo One', sans-serif"
         menuBtn.style.boxShadow = '0 4px 0 #7f0000, 0 6px 10px rgba(0,0,0,0.3)'
-        menuBtn.style.transition = 'all 0.2s ease'
+        menuBtn.style.transition = 'all 0.15s ease'
+        if (isMobileDevice) menuBtn.style.width = '80%'
+        touchActivate(menuBtn)
         
         menuBtn.addEventListener('mouseenter', () => {
           menuBtn.style.transform = 'translateY(-2px)'
@@ -1566,8 +2262,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
             }
           })
           
-          // Explicitly remove mobile controls wrapper
+          // Explicitly remove mobile controls
           document.querySelectorAll('.mobile-controls-wrapper').forEach(el => el.remove())
+          document.querySelectorAll('.mobile-controls-container').forEach(el => el.remove())
           document.querySelectorAll('.mobile-pause-btn').forEach(el => el.remove())
         })
         buttonContainer.appendChild(menuBtn)
@@ -1603,57 +2300,185 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     return grid[y][x] === 'wall'
   }
   
+  // Shared explosion material (reused across all explosion visuals)
+  const sharedExplosionMat = new StandardMaterial('shared-exp-mat', scene)
+  sharedExplosionMat.emissiveColor = new Color3(1, 0.5, 0)
+  sharedExplosionMat.diffuseColor = new Color3(1, 0.3, 0)
+  sharedExplosionMat.specularColor = new Color3(0, 0, 0)
+  sharedExplosionMat.alpha = 0.9
+
+  // Shared halo material for explosions
+  const sharedHaloMat = new StandardMaterial('shared-halo-mat', scene)
+  sharedHaloMat.emissiveColor = new Color3(1, 0.6, 0.1)
+  sharedHaloMat.diffuseColor = new Color3(0, 0, 0)
+  sharedHaloMat.alpha = 0.4
+  sharedHaloMat.specularColor = new Color3(0, 0, 0)
+
+  // Shared scorch material for explosions
+  const sharedScorchMat = new StandardMaterial('shared-scorch-mat', scene)
+  sharedScorchMat.diffuseColor = new Color3(0.15, 0.1, 0.05)
+  sharedScorchMat.alpha = 0.7
+  sharedScorchMat.specularColor = new Color3(0, 0, 0)
+
+  // Cached power-up materials (one per type, reused across all power-ups)
+  const powerUpMaterialCache = new Map<PowerUpType, StandardMaterial>()
+  function getPowerUpMaterial(type: PowerUpType): StandardMaterial {
+    if (powerUpMaterialCache.has(type)) return powerUpMaterialCache.get(type)!
+    
+    const emoji = type === 'extraBomb' ? '💣' :
+                  type === 'largerBlast' ? '⚡' :
+                  type === 'kick' ? '🦶' :
+                  type === 'throw' ? '✋' :
+                  type === 'shield' ? '🛡️' :
+                  type === 'pierce' ? '🔥' :
+                  type === 'ghost' ? '👻' :
+                  type === 'powerBomb' ? '☢️' :
+                  type === 'lineBomb' ? '🧨' : '👟'
+    const glowColor = type === 'extraBomb' ? 'cyan' :
+                      type === 'largerBlast' ? 'yellow' :
+                      type === 'kick' ? 'orange' :
+                      type === 'throw' ? 'pink' :
+                      type === 'shield' ? '#ffd700' :
+                      type === 'pierce' ? '#ff3333' :
+                      type === 'ghost' ? '#b388ff' :
+                      type === 'powerBomb' ? '#ff6600' :
+                      type === 'lineBomb' ? '#ff00ff' : 'cyan'
+    
+    const dynamicTexture = new DynamicTexture('powerupTexture-' + type, 256, scene, true)
+    const ctx = dynamicTexture.getContext() as CanvasRenderingContext2D
+    
+    ctx.clearRect(0, 0, 256, 256)
+    ctx.beginPath()
+    ctx.arc(128, 128, 120, 0, Math.PI * 2)
+    ctx.fillStyle = glowColor
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(128, 128, 110, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(0,0,0,0.9)'
+    ctx.fill()
+    ctx.font = 'bold 160px Arial'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = 'white'
+    ctx.fillText(emoji, 128, 138)
+    dynamicTexture.update()
+    
+    const mat = new StandardMaterial('emojiMat-' + type, scene)
+    mat.diffuseTexture = dynamicTexture
+    mat.emissiveColor = new Color3(0.8, 0.8, 0.8)
+    mat.opacityTexture = dynamicTexture
+    mat.disableLighting = true
+    mat.backFaceCulling = false
+    
+    powerUpMaterialCache.set(type, mat)
+    return mat
+  }
+
   // Create a stylized bomb with fuse
+  // Shared bomb materials (reused across all bombs to reduce draw calls)
+  const sharedBombMat = new StandardMaterial('shared-bomb-mat', scene)
+  sharedBombMat.diffuseColor = new Color3(0.12, 0.12, 0.14)
+  sharedBombMat.specularColor = new Color3(0.5, 0.5, 0.5)
+  sharedBombMat.specularPower = 48
+
+  const sharedFuseMat = new StandardMaterial('shared-fuse-mat', scene)
+  sharedFuseMat.diffuseColor = new Color3(0.55, 0.35, 0.15)
+  sharedFuseMat.specularColor = new Color3(0, 0, 0)
+
+  const sharedRivetMat = new StandardMaterial('shared-rivet-mat', scene)
+  sharedRivetMat.diffuseColor = new Color3(0.45, 0.45, 0.48)
+  sharedRivetMat.specularColor = new Color3(0.6, 0.6, 0.6)
+  sharedRivetMat.specularPower = 64
+
+  const sharedSparkMat = new StandardMaterial('shared-spark-mat', scene)
+  sharedSparkMat.emissiveColor = new Color3(1, 0.7, 0.1)
+  sharedSparkMat.diffuseColor = new Color3(1, 0.9, 0.3)
+  sharedSparkMat.specularColor = new Color3(0, 0, 0)
+
+  const sharedDangerMat = new StandardMaterial('shared-danger-mat', scene)
+  sharedDangerMat.diffuseColor = new Color3(1, 0.15, 0)
+  sharedDangerMat.emissiveColor = new Color3(0.3, 0, 0)
+  sharedDangerMat.alpha = 0
+  sharedDangerMat.specularColor = new Color3(0, 0, 0)
+
   function createBombMesh() {
-    // Main bomb body
-    const bombBody = MeshBuilder.CreateSphere('bomb-body', { diameter: TILE_SIZE * 0.55 }, scene)
-    
-    // Create bomb material with gradient-like effect
-    const bombMatDynamic = new StandardMaterial('bomb-mat-dynamic', scene)
-    bombMatDynamic.diffuseColor = new Color3(0.15, 0.15, 0.15)
-    bombMatDynamic.specularColor = new Color3(0.4, 0.4, 0.4)
-    bombMatDynamic.specularPower = 32
-    bombBody.material = bombMatDynamic
-    
-    // Fuse cylinder
-    const fuse = MeshBuilder.CreateCylinder('fuse', { 
-      height: TILE_SIZE * 0.2, 
-      diameter: TILE_SIZE * 0.08 
+    const T = TILE_SIZE
+
+    // Main bomb body — slightly squashed sphere for cartoon feel
+    const bombBody = MeshBuilder.CreateSphere('bomb-body', { diameter: T * 0.52, segments: 12 }, scene)
+    bombBody.scaling = new Vector3(1, 0.92, 1)
+    bombBody.material = sharedBombMat
+
+    // Metallic rim band around equator
+    const band = MeshBuilder.CreateTorus('band', {
+      diameter: T * 0.36, thickness: T * 0.045, tessellation: 20
     }, scene)
-    fuse.position.y = TILE_SIZE * 0.32
-    fuse.parent = bombBody
-    
-    const fuseMat = new StandardMaterial('fuse-mat', scene)
-    fuseMat.diffuseColor = new Color3(0.6, 0.4, 0.2)
-    fuseMat.specularColor = new Color3(0, 0, 0)
-    fuse.material = fuseMat
-    
-    // Spark/flame on fuse tip (small sphere that glows)
-    const spark = MeshBuilder.CreateSphere('spark', { diameter: TILE_SIZE * 0.12 }, scene)
-    spark.position.y = TILE_SIZE * 0.42
-    spark.parent = bombBody
-    
-    const sparkMat = new StandardMaterial('spark-mat', scene)
-    sparkMat.emissiveColor = new Color3(1, 0.6, 0)
-    sparkMat.diffuseColor = new Color3(1, 0.8, 0)
-    sparkMat.specularColor = new Color3(0, 0, 0)
-    spark.material = sparkMat
-    
-    // Add highlight ring for style
-    const ring = MeshBuilder.CreateTorus('ring', { 
-      diameter: TILE_SIZE * 0.3, 
-      thickness: TILE_SIZE * 0.05 
+    band.rotation.x = Math.PI / 2
+    band.position.y = 0
+    band.material = sharedRivetMat
+    band.parent = bombBody
+
+    // Rivets around the band (6 evenly spaced)
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2
+      const rivet = MeshBuilder.CreateSphere('rivet' + i, { diameter: T * 0.04, segments: 4 }, scene)
+      rivet.position = new Vector3(
+        Math.cos(angle) * T * 0.18,
+        0,
+        Math.sin(angle) * T * 0.18
+      )
+      rivet.material = sharedRivetMat
+      rivet.parent = bombBody
+    }
+
+    // Fuse base (nozzle)
+    const nozzle = MeshBuilder.CreateCylinder('nozzle', {
+      height: T * 0.08, diameterTop: T * 0.1, diameterBottom: T * 0.06, tessellation: 8
     }, scene)
-    ring.position.y = 0
-    ring.rotation.x = Math.PI / 2
-    ring.parent = bombBody
-    
-    const ringMat = new StandardMaterial('ring-mat', scene)
-    ringMat.diffuseColor = new Color3(0.3, 0.3, 0.3)
-    ringMat.specularColor = new Color3(0.5, 0.5, 0.5)
-    ring.material = ringMat
-    
+    nozzle.position.y = T * 0.26
+    nozzle.material = sharedRivetMat
+    nozzle.parent = bombBody
+
+    // Fuse (slightly curved using two segments)
+    const fuseBase = MeshBuilder.CreateCylinder('fuse-base', {
+      height: T * 0.12, diameter: T * 0.04, tessellation: 6
+    }, scene)
+    fuseBase.position.y = T * 0.34
+    fuseBase.rotation.z = 0.15
+    fuseBase.material = sharedFuseMat
+    fuseBase.parent = bombBody
+
+    const fuseTip = MeshBuilder.CreateCylinder('fuse-tip', {
+      height: T * 0.1, diameter: T * 0.035, tessellation: 6
+    }, scene)
+    fuseTip.position.y = T * 0.06
+    fuseTip.rotation.z = 0.2
+    fuseTip.material = sharedFuseMat
+    fuseTip.parent = fuseBase
+
+    // Spark / flame on tip
+    const spark = MeshBuilder.CreateSphere('spark', { diameter: T * 0.1, segments: 6 }, scene)
+    spark.position.y = T * 0.12
+    spark.material = sharedSparkMat
+    spark.parent = fuseBase
+
+    // Danger ring on the ground (grows as bomb nears detonation)
+    const dangerRing = MeshBuilder.CreateTorus('danger-ring', {
+      diameter: T * 0.6, thickness: T * 0.02, tessellation: 24
+    }, scene)
+    dangerRing.rotation.x = Math.PI / 2
+    dangerRing.position.y = -T * 0.24
+    dangerRing.material = sharedDangerMat
+    dangerRing.parent = bombBody
+
     return bombBody
+  }
+
+  // Cache spark and danger-ring mesh refs on a bomb object for per-frame access
+  function cacheBombChildRefs(bomb: any) {
+    const children = bomb.mesh.getChildMeshes()
+    bomb._spark = children.find((m: any) => m.name === 'spark') || null
+    bomb._dangerRing = children.find((m: any) => m.name === 'danger-ring') || null
   }
 
   // Place bomb function (for player 1 or enemies)
@@ -1667,27 +2492,78 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     const bombMesh = createBombMesh()
     bombMesh.position = gridToWorld(x, y)
 
+    // Calculate blast radius (with Power Bomb bonus for player 1)
+    let effectiveBlastRadius = ownerBlastRadius !== undefined ? ownerBlastRadius : blastRadius
+    if (ownerId === -1 && powerBombCharges > 0) {
+      effectiveBlastRadius += 3
+      powerBombCharges--
+      // Visual: tint the bomb orange to indicate power bomb (clone to avoid mutating shared material)
+      if (bombMesh.material) {
+        const pbMat = (bombMesh.material as StandardMaterial).clone('power-bomb-mat')!
+        pbMat.emissiveColor = new Color3(1, 0.4, 0)
+        bombMesh.material = pbMat
+      }
+      updateUI()
+    }
+
     bombs.push({
       x,
       y,
       timer: 2200, // 2.2 seconds
       mesh: bombMesh,
-      blastRadius: ownerBlastRadius !== undefined ? ownerBlastRadius : blastRadius,
+      blastRadius: effectiveBlastRadius,
       ownerId,
     })
+    cacheBombChildRefs(bombs[bombs.length - 1])
     
     if (ownerId === -1) {
       currentBombs++
+      if ((player as any).triggerSquash) (player as any).triggerSquash()
     }
     
     // Play sound and track stats
     if (soundManager) soundManager.playSFX('bomb-place')
+    haptic(10)
     statsManager.recordBombPlaced()
     
     // Check bomber achievement
     if (achievementsManager.incrementProgress('bomber')) {
       showAchievementNotification(achievementsManager.getAchievement('bomber')!)
     }
+  }
+
+  // Line Bomb: place a row of bombs in facing direction
+  function placeLineBomb(startX: number, startY: number, dx: number, dy: number, ownerId: number) {
+    const isP1 = ownerId === -1
+    const isP2 = ownerId === -2
+    const max = isP1 ? maxBombs : isP2 ? player2MaxBombs : 1
+    const current = isP1 ? currentBombs : isP2 ? player2CurrentBombs : 0
+    const available = max - current
+    if (available <= 0) return
+
+    let placed = 0
+    for (let i = 0; i < available; i++) {
+      const bx = startX + dx * i
+      const by = startY + dy * i
+      if (bx < 0 || by < 0 || bx >= GRID_WIDTH || by >= GRID_HEIGHT) break
+      if (grid[by][bx] === 'wall') break
+      if (grid[by][bx] === 'destructible') break
+      if (bombs.some(b => b.x === bx && b.y === by)) continue
+
+      const bombMesh = createBombMesh()
+      bombMesh.position = gridToWorld(bx, by)
+
+      const br = isP1 ? blastRadius : isP2 ? player2BlastRadius : 2
+      bombs.push({ x: bx, y: by, timer: 2200, mesh: bombMesh, blastRadius: br, ownerId })
+      cacheBombChildRefs(bombs[bombs.length - 1])
+      placed++
+      if (soundManager) soundManager.playSFX('bomb-place')
+      statsManager.recordBombPlaced()
+    }
+
+    if (isP1) currentBombs += placed
+    else if (isP2) player2CurrentBombs += placed
+    if (placed > 0) haptic(30)
   }
 
   // Create particle system for explosions
@@ -1742,28 +2618,26 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   }
   
   // Create a white smoke texture for particle systems
-  function createSmokeTexture(): Texture {
-    // Create soft transparent circle
-    const dynamicTexture = new DynamicTexture("smokeTexture-" + Date.now(), 64, scene, false);
+  // Shared smoke texture (reused across all smoke particle systems)
+  let _sharedSmokeTexture: Texture | null = null
+  function getSharedSmokeTexture(): Texture {
+    if (_sharedSmokeTexture) return _sharedSmokeTexture
+    const dynamicTexture = new DynamicTexture("smokeTexture-shared", 64, scene, false);
     const ctx = dynamicTexture.getContext();
     const size = dynamicTexture.getSize();
     const mid = size.width / 2;
-    
     ctx.clearRect(0, 0, size.width, size.height);
-    
-    // Radial gradient: White center -> Transparent edge
     const gradient = ctx.createRadialGradient(mid, mid, 0, mid, mid, mid);
     gradient.addColorStop(0, "rgba(255, 255, 255, 1.0)");
     gradient.addColorStop(0.5, "rgba(220, 220, 220, 0.8)");
     gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
-    
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size.width, size.height);
-    
     dynamicTexture.update();
+    _sharedSmokeTexture = dynamicTexture;
     return dynamicTexture;
   }
-  
+
   // Create smoke particles for after explosion
   function createSmokeParticles(x: number, y: number) {
     const smokeSystem = new ParticleSystem('smoke', 50, scene)
@@ -1773,9 +2647,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     emitter.isVisible = false
     smokeSystem.emitter = emitter
     
-    // Create a new texture for this smoke system (avoid sharing issues)
-    const smokeTexture = createSmokeTexture()
-    smokeSystem.particleTexture = smokeTexture
+    smokeSystem.particleTexture = getSharedSmokeTexture()
 
     smokeSystem.color1 = new Color4(0.9, 0.9, 0.9, 0.8) // White-ish, high opacity
     smokeSystem.color2 = new Color4(0.7, 0.7, 0.7, 0.6) // Light Gray
@@ -1803,7 +2675,6 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       smokeSystem.stop()
       setTimeout(() => {
         smokeSystem.dispose()
-        smokeTexture.dispose()
         emitter.dispose()
       }, 2000)
     }, 300)
@@ -1814,6 +2685,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     // Screen shake and sound
     screenShake(0.4, 250)
     if (soundManager) soundManager.playSFX('explosion')
+    haptic([30, 20, 50])
+    
+    // Check if bomb owner has pierce ability
+    const ownerHasPierce = bomb.ownerId === -1 ? hasPierce :
+                           bomb.ownerId === -2 ? player2HasPierce : false
     
     const explosionTiles: Array<[number, number]> = [[bomb.x, bomb.y]]
     
@@ -1834,53 +2710,100 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
         explosionTiles.push([x, y])
 
-        // Stop if we hit a destructible block
-        if (grid[y][x] === 'destructible') break
+        // Stop if we hit a destructible block (unless pierce)
+        if (grid[y][x] === 'destructible' && !ownerHasPierce) break
       }
     }
 
     // Create explosion visuals with animation
     const explosionMeshes: any[] = []
-    for (const [x, y] of explosionTiles) {
-      // Create a more dynamic explosion shape
-      const explosion = MeshBuilder.CreateSphere('explosion', { diameter: TILE_SIZE * 0.8 }, scene)
-      explosion.position = gridToWorld(x, y)
-      
-      // Create a glowing explosion material
-      const expMat = new StandardMaterial('exp-mat-' + Math.random(), scene)
-      expMat.emissiveColor = new Color3(1, 0.5, 0)
-      expMat.diffuseColor = new Color3(1, 0.3, 0)
-      expMat.specularColor = new Color3(0, 0, 0)
-      expMat.alpha = 0.9
-      explosion.material = expMat
-      explosionMeshes.push(explosion)
+    for (let idx = 0; idx < explosionTiles.length; idx++) {
+      const [x, y] = explosionTiles[idx]
+      const isCenter = idx === 0
+
+      // ── Core fireball ──
+      const fireball = MeshBuilder.CreateSphere('exp-fire', {
+        diameter: TILE_SIZE * (isCenter ? 0.95 : 0.8), segments: 8
+      }, scene)
+      fireball.position = gridToWorld(x, y)
+      fireball.material = sharedExplosionMat
+      explosionMeshes.push(fireball)
+
+      // ── Outer glow halo ──
+      const halo = MeshBuilder.CreateSphere('exp-halo', {
+        diameter: TILE_SIZE * (isCenter ? 1.2 : 1.0), segments: 6
+      }, scene)
+      halo.position = gridToWorld(x, y)
+      halo.material = sharedHaloMat
+      explosionMeshes.push(halo)
+
+      // ── Ground scorch ring ──
+      const scorch = MeshBuilder.CreateDisc('exp-scorch', {
+        radius: TILE_SIZE * 0.4, tessellation: 12
+      }, scene)
+      scorch.rotation.x = Math.PI / 2
+      scorch.position = gridToWorld(x, y)
+      scorch.position.y = 0.02
+      scorch.material = sharedScorchMat
+      explosionMeshes.push(scorch)
 
       // Create fire particle effect
       createExplosionParticles(x, y)
-      
+
       // Add smoke after fire
       setTimeout(() => createSmokeParticles(x, y), 100)
 
-      // Animate explosion scale and fade
-      const scaleAnim = new Animation('scaleAnim', 'scaling', 30, Animation.ANIMATIONTYPE_VECTOR3)
+      // Staggered timing for directional tiles (ripple outward)
+      const delay = idx === 0 ? 0 : idx * 1.2
+
+      // ── Fireball animation ──
+      const scaleAnim = new Animation('scaleAnim', 'scaling', 60, Animation.ANIMATIONTYPE_VECTOR3)
       scaleAnim.setKeys([
-        { frame: 0, value: new Vector3(0.1, 0.1, 0.1) },
-        { frame: 4, value: new Vector3(1.3, 1.3, 1.3) },
-        { frame: 8, value: new Vector3(1.0, 1.0, 1.0) },
-        { frame: 12, value: new Vector3(0.6, 0.6, 0.6) },
+        { frame: delay + 0, value: new Vector3(0.05, 0.05, 0.05) },
+        { frame: delay + 3, value: new Vector3(1.4, 1.5, 1.4) },
+        { frame: delay + 7, value: new Vector3(1.1, 1.0, 1.1) },
+        { frame: delay + 14, value: new Vector3(0.5, 0.3, 0.5) },
+        { frame: delay + 20, value: new Vector3(0, 0, 0) },
       ])
-      explosion.animations.push(scaleAnim)
-      
-      // Fade out animation
-      const fadeAnim = new Animation('fadeAnim', 'visibility', 30, Animation.ANIMATIONTYPE_FLOAT)
+      fireball.animations.push(scaleAnim)
+
+      const fadeAnim = new Animation('fadeAnim', 'visibility', 60, Animation.ANIMATIONTYPE_FLOAT)
       fadeAnim.setKeys([
-        { frame: 0, value: 1 },
-        { frame: 8, value: 0.8 },
-        { frame: 12, value: 0 },
+        { frame: delay + 0, value: 1 },
+        { frame: delay + 10, value: 0.9 },
+        { frame: delay + 20, value: 0 },
       ])
-      explosion.animations.push(fadeAnim)
-      
-      scene.beginAnimation(explosion, 0, 12, false)
+      fireball.animations.push(fadeAnim)
+      scene.beginAnimation(fireball, 0, 24, false)
+
+      // ── Halo animation (expand & fade) ──
+      const haloScale = new Animation('haloScale', 'scaling', 60, Animation.ANIMATIONTYPE_VECTOR3)
+      haloScale.setKeys([
+        { frame: delay + 0, value: new Vector3(0.3, 0.3, 0.3) },
+        { frame: delay + 5, value: new Vector3(1.5, 1.5, 1.5) },
+        { frame: delay + 18, value: new Vector3(2.0, 0.5, 2.0) },
+      ])
+      halo.animations.push(haloScale)
+
+      const haloFade = new Animation('haloFade', 'visibility', 60, Animation.ANIMATIONTYPE_FLOAT)
+      haloFade.setKeys([
+        { frame: delay + 0, value: 0.5 },
+        { frame: delay + 6, value: 0.35 },
+        { frame: delay + 18, value: 0 },
+      ])
+      halo.animations.push(haloFade)
+      scene.beginAnimation(halo, 0, 24, false)
+
+      // Scorch fades slowly
+      const scorchFade = new Animation('scorchFade', 'visibility', 60, Animation.ANIMATIONTYPE_FLOAT)
+      scorchFade.setKeys([
+        { frame: 0, value: 0 },
+        { frame: 5, value: 0.7 },
+        { frame: 40, value: 0.3 },
+        { frame: 60, value: 0 },
+      ])
+      scorch.animations.push(scorchFade)
+      scene.beginAnimation(scorch, 0, 60, false)
 
       // Destroy destructible blocks
       if (grid[y][x] === 'destructible') {
@@ -1906,26 +2829,45 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           const rand = Math.random()
           let powerUpType: PowerUpType
           
-          // Adjusted probabilities: more bombs/blast, less kick/throw
-          if (rand < 0.35) {
-            powerUpType = 'extraBomb'  // 35%
-          } else if (rand < 0.65) {
-            powerUpType = 'largerBlast'  // 30%
-          } else if (rand < 0.75) {
-            powerUpType = 'kick'  // 10%
-          } else if (rand < 0.85) {
-            powerUpType = 'throw'  // 10%
+          if (settings.extendedPowerUps) {
+            // Extended pool: 10 power-up types
+            if (rand < 0.18) {
+              powerUpType = 'extraBomb'     // 18%
+            } else if (rand < 0.33) {
+              powerUpType = 'largerBlast'   // 15%
+            } else if (rand < 0.41) {
+              powerUpType = 'kick'          // 8%
+            } else if (rand < 0.49) {
+              powerUpType = 'throw'         // 8%
+            } else if (rand < 0.59) {
+              powerUpType = 'speed'         // 10%
+            } else if (rand < 0.69) {
+              powerUpType = 'shield'        // 10%
+            } else if (rand < 0.77) {
+              powerUpType = 'pierce'        // 8%
+            } else if (rand < 0.85) {
+              powerUpType = 'ghost'         // 8%
+            } else if (rand < 0.93) {
+              powerUpType = 'powerBomb'     // 8%
+            } else {
+              powerUpType = 'lineBomb'      // 7%
+            }
           } else {
-            powerUpType = 'speed'  // 15%
+            // Classic pool: 5 power-up types
+            if (rand < 0.35) {
+              powerUpType = 'extraBomb'  // 35%
+            } else if (rand < 0.65) {
+              powerUpType = 'largerBlast'  // 30%
+            } else if (rand < 0.75) {
+              powerUpType = 'kick'  // 10%
+            } else if (rand < 0.85) {
+              powerUpType = 'throw'  // 10%
+            } else {
+              powerUpType = 'speed'  // 15%
+            }
           }
           
-          // Create power-up with emoji on a plane
-          const powerUpEmoji = powerUpType === 'extraBomb' ? '💣' :
-                               powerUpType === 'largerBlast' ? '⚡' :
-                               powerUpType === 'kick' ? '👟' :
-                               powerUpType === 'throw' ? '✋' : '🚀'
-          
-          // Create emoji plane
+          // Create emoji plane (material is cached per type)
           const pos = gridToWorld(x, y)
           const emojiPlane = MeshBuilder.CreatePlane('powerup-emoji', { 
             size: TILE_SIZE * 0.8  // Increased size from 0.6
@@ -1934,60 +2876,24 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           emojiPlane.position.y = TILE_SIZE * 0.5
           emojiPlane.position.z = pos.z
           emojiPlane.billboardMode = 7 // Always face camera
-          
-          // Create dynamic texture for emoji
-          const dynamicTexture = new DynamicTexture('powerupTexture' + Math.random(), 256, scene, true)
-          const ctx = dynamicTexture.getContext() as CanvasRenderingContext2D
-          
-          // Solid black circle with white/glow ring for max contrast
-          ctx.clearRect(0, 0, 256, 256)
-          
-          // Outer glow ring
-          ctx.beginPath()
-          ctx.arc(128, 128, 120, 0, Math.PI * 2)
-          ctx.fillStyle = powerUpType === 'extraBomb' ? 'cyan' :
-                          powerUpType === 'largerBlast' ? 'yellow' :
-                          powerUpType === 'kick' ? 'orange' :
-                          powerUpType === 'throw' ? 'pink' : 'cyan'
-          ctx.fill()
-          
-          // Inner dark circle
-          ctx.beginPath()
-          ctx.arc(128, 128, 110, 0, Math.PI * 2)
-          ctx.fillStyle = 'rgba(0,0,0,0.9)'
-          ctx.fill()
-          
-          // Draw emoji on top
-          ctx.font = 'bold 160px Arial'
-          ctx.textAlign = 'center'
-          ctx.textBaseline = 'middle'
-          ctx.fillStyle = 'white'
-          ctx.fillText(powerUpEmoji, 128, 138)
-          dynamicTexture.update()
-          
-          // Create material with emoji texture
-          const emojiMaterial = new StandardMaterial('emojiMat' + Math.random(), scene)
-          emojiMaterial.diffuseTexture = dynamicTexture
-          // High emissive for self-illumination
-          emojiMaterial.emissiveColor = new Color3(0.8, 0.8, 0.8) 
-          emojiMaterial.opacityTexture = dynamicTexture
-          emojiMaterial.disableLighting = true
-          emojiMaterial.backFaceCulling = false
-          emojiPlane.material = emojiMaterial
+          emojiPlane.material = getPowerUpMaterial(powerUpType)
           
           // Floating animation - Removed duplicate animation code
           const powerUpSphere = emojiPlane
           
           // Add bobbing animation
           let bobTime = Math.random() * Math.PI * 2
-          scene.registerBeforeRender(() => {
+          const bobObserver = scene.onBeforeRenderObservable.add(() => {
             if (powerUpSphere && !powerUpSphere.isDisposed()) {
               bobTime += 0.05
               // Bob higher
               powerUpSphere.position.y = TILE_SIZE * 0.5 + Math.sin(bobTime) * 0.15
-              // Remove rotation, it interacts weirdly with billboard mode sometimes
-              // powerUpSphere.rotation.y += 0.02
             }
+          })
+          
+          // Clean up observer when power-up is disposed
+          powerUpSphere.onDisposeObservable.add(() => {
+            scene.onBeforeRenderObservable.remove(bobObserver)
           })
           
           powerUps.push({ x, y, type: powerUpType, mesh: powerUpSphere })
@@ -1996,6 +2902,18 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
       // Check if player is hit
       if (x === playerGridX && y === playerGridY && !playerInvulnerable) {
+        // Shield absorbs the hit
+        if (shieldCharges > 0) {
+          shieldCharges--
+          playerInvulnerable = true
+          playerInvulnerableTimer = 1000 // Shorter invuln after shield break
+          if (soundManager) soundManager.playSFX('powerup')
+          haptic([20, 10, 20])
+          const playerPos = gridToWorld(playerGridX, playerGridY)
+          showHitIndicator(playerPos, scene, false)
+          console.log('Shield absorbed hit! Charges remaining:', shieldCharges)
+          updateUI()
+        } else {
         playerLives--
         playerInvulnerable = true
         playerInvulnerableTimer = 2000 // 2 seconds invulnerability
@@ -2003,6 +2921,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         
         // Play death/hit sound
         if (soundManager) soundManager.playSFX('death')
+        haptic([50, 30, 80])
         
         // Show hit indicator
         const playerPos = gridToWorld(playerGridX, playerGridY)
@@ -2024,6 +2943,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           statsManager.recordDeath()
         }
         updateUI()
+        } // end of shield else
       }
 
       // Check if any enemy is hit
@@ -2070,6 +2990,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
                   // Use same distinct colors for survival waves
                   const enemyColors = ['#ffffff', '#8d6e63', '#b91c1c']
                   const enemyMesh = createPlayerSprite(`enemy-wave${survivalWave}-${i}`, null, enemyEmojis[i % 3], enemyColors[i % 3])
+                  const enemyPos = gridToWorld(spawn.x, spawn.y)
                   const enemy: Enemy = {
                     x: spawn.x,
                     y: spawn.y,
@@ -2078,8 +2999,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
                     lives: difficultyConfig.enemyStartingLives + Math.floor(survivalWave / 3), // Increase health every 3 waves
                     invulnerable: false,
                     invulnerableTimer: 0,
+                    visualX: enemyPos.x,
+                    visualZ: enemyPos.z,
                   }
-                  const enemyPos = gridToWorld(enemy.x, enemy.y)
                   enemy.mesh.position.x = enemyPos.x
                   enemy.mesh.position.y = TILE_SIZE * 0.5
                   enemy.mesh.position.z = enemyPos.z
@@ -2155,12 +3077,22 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
       // Check if player 2 is hit (PvP mode)
       if (gameMode === 'pvp' && x === player2GridX && y === player2GridY && !player2Invulnerable) {
+        if (player2ShieldCharges > 0) {
+          player2ShieldCharges--
+          player2Invulnerable = true
+          player2InvulnerableTimer = 1000
+          if (soundManager) soundManager.playSFX('powerup')
+          haptic([20, 10, 20])
+          console.log('Player 2 shield absorbed hit! Charges:', player2ShieldCharges)
+          updateUI()
+        } else {
         player2Lives--
         player2Invulnerable = true
         player2InvulnerableTimer = 2000
         
         // Play death/hit sound
         if (soundManager) soundManager.playSFX('death')
+        haptic([50, 30, 80])
         
         // Show hit indicator
         const player2Pos = gridToWorld(player2GridX, player2GridY)
@@ -2174,66 +3106,138 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           gameWon = true
           gameOver = true
           if (soundManager) soundManager.stopMusic()
+          statsManager.recordWin()
+          if (soundManager) soundManager.playSFX('victory')
         }
         updateUI()
+        } // end of shield else
       }
     }
 
-    // Remove explosion visuals after a short time
+    // Remove explosion visuals after animation finishes
     setTimeout(() => {
-      explosionMeshes.forEach(mesh => mesh.dispose())
-    }, 300)
+      explosionMeshes.forEach(mesh => {
+        mesh.dispose()
+      })
+    }, 1000)
 
     // Chain reaction: explode other bombs
+    let triggeredChain = false
     bombs.forEach(otherBomb => {
       if (otherBomb !== bomb) {
         for (const [x, y] of explosionTiles) {
           if (otherBomb.x === x && otherBomb.y === y) {
             otherBomb.timer = 0
+            triggeredChain = true
           }
         }
       }
     })
+    
+    // Track chain reactions for achievement
+    if (triggeredChain) {
+      chainReactionCount++
+      // Reset the timer - chain ends when no more bombs explode within 500ms
+      if (chainReactionTimer) clearTimeout(chainReactionTimer)
+      chainReactionTimer = setTimeout(() => {
+        if (chainReactionCount >= 3) {
+          if (achievementsManager.unlock('chain-reaction')) {
+            showAchievementNotification(achievementsManager.getAchievement('chain-reaction')!)
+          }
+        }
+        chainReactionCount = 0
+        chainReactionTimer = null
+      }, 500)
+    }
   }
 
   // Update bombs
   function updateBombs(deltaTime: number) {
+    const now = Date.now()
     for (let i = bombs.length - 1; i >= 0; i--) {
       const bomb = bombs[i]
       bomb.timer -= deltaTime
 
-      // Bomb pulsing animation - gets faster and more intense as timer runs out
-      const timeRatio = bomb.timer / 2000
-      const pulseSpeed = 6 + (1 - timeRatio) * 20 // Speed up dramatically
-      const pulseAmount = 0.08 + (1 - timeRatio) * 0.25 // Pulse more as time runs out
-      const scale = 1 + Math.sin(Date.now() * pulseSpeed / 1000) * pulseAmount
-      bomb.mesh.scaling = new Vector3(scale, scale, scale)
-      
-      // Make bomb glow red as timer runs out
-      if (bomb.mesh.material) {
-        if (timeRatio < 0.5) {
-          const intensity = (0.5 - timeRatio) * 2 // 0 to 1 over last half
-          bomb.mesh.material.emissiveColor = new Color3(intensity, intensity * 0.2, 0)
+      const timeRatio = bomb.timer / 2200
+      const urgency = 1 - timeRatio // 0 → 1 as bomb nears detonation
+
+      // ── Pulse: faster & stronger as timer runs out ──
+      const pulseSpeed = 5 + urgency * 25
+      const pulseAmp = 0.06 + urgency * 0.22
+      const pulse = 1 + Math.sin(now * pulseSpeed / 1000) * pulseAmp
+      bomb.mesh.scaling.copyFromFloats(pulse, pulse * (1 + urgency * 0.08), pulse)
+
+      // ── Body glow: ramp from dark to angry red/orange ──
+      if (bomb.mesh.material && bomb.mesh.material !== sharedBombMat) {
+        // power-bomb or already-cloned material – animate glow
+        if (urgency > 0.4) {
+          const i2 = (urgency - 0.4) / 0.6
+          bomb.mesh.material.emissiveColor.copyFromFloats(
+            Math.min(1, i2 * 0.9 + (bomb.mesh.material.emissiveColor.r > 0.3 ? 0.4 : 0)),
+            i2 * 0.15 + (bomb.mesh.material.emissiveColor.g > 0.2 ? 0.15 : 0),
+            0
+          )
+        }
+      } else if (bomb.mesh.material) {
+        if (urgency > 0.4) {
+          const i2 = (urgency - 0.4) / 0.6
+          // Clone material once to avoid tinting all bombs the same
+          if (bomb.mesh.material === sharedBombMat) {
+            const m = sharedBombMat.clone('bomb-mat-' + i)!
+            bomb.mesh.material = m
+          }
+          bomb.mesh.material.emissiveColor.copyFromFloats(i2 * 0.9, i2 * 0.15, 0)
         }
       }
-      
-      // Find and animate the spark on the fuse
-      const spark = bomb.mesh.getChildMeshes().find((m: any) => m.name === 'spark')
-      if (spark && spark.material) {
-        // Flicker the spark
-        const flicker = 0.7 + Math.random() * 0.3
-        spark.material.emissiveColor = new Color3(flicker, flicker * 0.5, 0)
-        spark.scaling = new Vector3(
-          0.8 + Math.random() * 0.4, 
-          0.8 + Math.random() * 0.4, 
-          0.8 + Math.random() * 0.4
-        )
+
+      // ── Spark flicker: use cached ref ──
+      const spark = (bomb as any)._spark
+      if (spark) {
+        const f = 0.6 + Math.random() * 0.4
+        const s = 0.7 + Math.random() * 0.6
+        spark.scaling.copyFromFloats(s, s, s)
+        if (spark.material && spark.material !== sharedSparkMat) {
+          spark.material.emissiveColor.copyFromFloats(f, f * 0.55, f * 0.1)
+        } else if (spark.material) {
+          // Clone once
+          const sm = sharedSparkMat.clone('spark-live-' + i)!
+          spark.material = sm
+          sm.emissiveColor.copyFromFloats(f, f * 0.55, f * 0.1)
+        }
       }
+
+      // ── Danger ring: use cached ref ──
+      const dangerRing = (bomb as any)._dangerRing
+      if (dangerRing) {
+        if (urgency > 0.6) {
+          const dp = (urgency - 0.6) / 0.4 // 0→1
+          const ringScale = 1 + dp * 1.5
+          dangerRing.scaling.copyFromFloats(ringScale, ringScale, ringScale)
+          if (dangerRing.material && dangerRing.material !== sharedDangerMat) {
+            dangerRing.material.alpha = dp * 0.6 * (0.5 + 0.5 * Math.sin(now * 0.012))
+          } else if (dangerRing.material) {
+            const dm = sharedDangerMat.clone('danger-live-' + i)!
+            dangerRing.material = dm
+            dm.alpha = dp * 0.6
+          }
+        }
+      }
+
+      // ── Slight wobble for personality ── 
+      bomb.mesh.rotation.z = Math.sin(now * 0.008 + i) * urgency * 0.12
+      bomb.mesh.rotation.x = Math.cos(now * 0.006 + i) * urgency * 0.08
 
       if (bomb.timer <= 0) {
         explodeBomb(bomb)
-        // Dispose bomb and all children
-        bomb.mesh.getChildMeshes().forEach((child: any) => child.dispose())
+        // Dispose cloned materials to prevent memory leaks
+        // Dispose cloned body material
+        if (bomb.mesh.material && bomb.mesh.material !== sharedBombMat) bomb.mesh.material.dispose()
+        bomb.mesh.getChildMeshes().forEach((child: any) => {
+          if (child.material && child.material !== sharedBombMat && child.material !== sharedFuseMat && child.material !== sharedRivetMat && child.material !== sharedSparkMat && child.material !== sharedDangerMat) {
+            child.material.dispose()
+          }
+          child.dispose()
+        })
         bomb.mesh.dispose()
         
         // Decrement the correct owner's bomb count
@@ -2286,6 +3290,27 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         }
       }
     })
+
+    // Ghost mode timers
+    if (ghostTimer > 0) {
+      ghostTimer -= deltaTime
+      // Visual: ghostly flicker
+      player.visibility = 0.5 + Math.sin(Date.now() / 150) * 0.2
+      if (ghostTimer <= 0) {
+        ghostTimer = 0
+        player.visibility = playerInvulnerable ? player.visibility : 1
+        console.log('Player 1: Ghost mode expired!')
+      }
+    }
+    if (player2GhostTimer > 0) {
+      player2GhostTimer -= deltaTime
+      if (player2) player2.visibility = 0.5 + Math.sin(Date.now() / 150) * 0.2
+      if (player2GhostTimer <= 0) {
+        player2GhostTimer = 0
+        if (player2) player2.visibility = player2Invulnerable ? player2.visibility : 1
+        console.log('Player 2: Ghost mode expired!')
+      }
+    }
   }
 
   // Smart AI for enemies
@@ -2564,6 +3589,21 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           playerSpeed++
           moveDelay = Math.max(50, 150 - (playerSpeed - 1) * 30)
           console.log('Player 1: Speed increased! Speed:', playerSpeed)
+        } else if (powerUp.type === 'shield') {
+          shieldCharges = Math.min(3, shieldCharges + 1)
+          console.log('Player 1: Shield! Charges:', shieldCharges)
+        } else if (powerUp.type === 'pierce') {
+          hasPierce = true
+          console.log('Player 1: Pierce ability acquired! Blasts pass through blocks!')
+        } else if (powerUp.type === 'ghost') {
+          ghostTimer = 8000 // 8 seconds
+          console.log('Player 1: Ghost mode activated! Walk through blocks for 8s!')
+        } else if (powerUp.type === 'powerBomb') {
+          powerBombCharges++
+          console.log('Player 1: Power Bomb! Charges:', powerBombCharges)
+        } else if (powerUp.type === 'lineBomb') {
+          hasLineBomb = true
+          console.log('Player 1: Line Bomb ability acquired!')
         }
         powerUp.mesh.dispose()
         powerUps.splice(i, 1)
@@ -2571,6 +3611,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         
         // Play sound and track stats
         if (soundManager) soundManager.playSFX('powerup')
+        haptic(20)
         statsManager.recordPowerUpCollected()
         statsManager.recordBlastRadius(blastRadius)
         statsManager.recordBombCount(maxBombs)
@@ -2611,6 +3652,21 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           player2Speed++
           player2MoveDelay = Math.max(50, 150 - (player2Speed - 1) * 30)
           console.log('Player 2: Speed increased! Speed:', player2Speed)
+        } else if (powerUp.type === 'shield') {
+          player2ShieldCharges = Math.min(3, player2ShieldCharges + 1)
+          console.log('Player 2: Shield! Charges:', player2ShieldCharges)
+        } else if (powerUp.type === 'pierce') {
+          player2HasPierce = true
+          console.log('Player 2: Pierce ability acquired!')
+        } else if (powerUp.type === 'ghost') {
+          player2GhostTimer = 8000
+          console.log('Player 2: Ghost mode activated!')
+        } else if (powerUp.type === 'powerBomb') {
+          player2PowerBombCharges++
+          console.log('Player 2: Power Bomb! Charges:', player2PowerBombCharges)
+        } else if (powerUp.type === 'lineBomb') {
+          player2HasLineBomb = true
+          console.log('Player 2: Line Bomb ability acquired!')
         }
         powerUp.mesh.dispose()
         powerUps.splice(i, 1)
@@ -2661,6 +3717,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       
       // Play kick sound
       if (soundManager) soundManager.playSFX('kick')
+      haptic(15)
       
       // Animate the bomb movement
       const targetPos = gridToWorld(bombAtTarget.x, bombAtTarget.y)
@@ -2724,6 +3781,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       
       // Play throw sound
       if (soundManager) soundManager.playSFX('throw')
+      haptic(15)
       
       // Animate the bomb movement (faster than kick)
       const targetPos = gridToWorld(bombAtPlayer.x, bombAtPlayer.y)
@@ -2755,18 +3813,34 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     const bombMesh = createBombMesh()
     bombMesh.position = gridToWorld(x, y)
 
+    // Calculate blast radius (with Power Bomb bonus)
+    let effectiveBlastRadius = player2BlastRadius
+    if (player2PowerBombCharges > 0) {
+      effectiveBlastRadius += 3
+      player2PowerBombCharges--
+      if (bombMesh.material) {
+        const pbMat = (bombMesh.material as StandardMaterial).clone('power-bomb-p2-mat')!
+        pbMat.emissiveColor = new Color3(1, 0.4, 0)
+        bombMesh.material = pbMat
+      }
+      updateUI()
+    }
+
     bombs.push({
       x,
       y,
       timer: 2200,
       mesh: bombMesh,
-      blastRadius: player2BlastRadius,
+      blastRadius: effectiveBlastRadius,
       ownerId: -2,
     })
+    cacheBombChildRefs(bombs[bombs.length - 1])
     player2CurrentBombs++
+    if (player2 && (player2 as any).triggerSquash) (player2 as any).triggerSquash()
     
     // Play sound
     if (soundManager) soundManager.playSFX('bomb-place')
+    haptic(10)
   }
 
   // Player 2 throw bomb
@@ -2825,34 +3899,52 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     mobileContainer.className = 'mobile-controls-container mobile-controls-visible'
     document.body.appendChild(mobileContainer)
 
-    // D-Pad
+    // D-Pad with touch-slide support
     const dpad = document.createElement('div')
     dpad.className = 'dpad'
     mobileContainer.appendChild(dpad)
+
+    // Track D-pad buttons for slide detection
+    const dpadButtons: { btn: HTMLElement; key: string }[] = []
+    let activeDpadKey: string | null = null
 
     const createBtn = (cls: string, key: string) => {
       const btn = document.createElement('div')
       btn.className = `dpad-btn ${cls}`
       dpad.appendChild(btn)
-      
+      dpadButtons.push({ btn, key })
+
+      const activateKey = (k: string, b: HTMLElement) => {
+        if (!keysHeld.has(k)) {
+          keysHeld.add(k)
+          keyPressTime.set(k, Date.now())
+        }
+        b.classList.add('active')
+        activeDpadKey = k
+      }
+      const deactivateKey = (k: string, b: HTMLElement) => {
+        keysHeld.delete(k)
+        keyPressTime.delete(k)
+        b.classList.remove('active')
+        if (activeDpadKey === k) activeDpadKey = null
+      }
+
       const start = (e: Event) => {
         if (e.cancelable) e.preventDefault()
-        if (!keysHeld.has(key)) {
-            keysHeld.add(key)
-            keyPressTime.set(key, Date.now())
-        }
-        btn.classList.add('active')
+        // Deactivate any other dpad button first
+        dpadButtons.forEach(({ btn: ob, key: ok }) => {
+          if (ok !== key) deactivateKey(ok, ob)
+        })
+        activateKey(key, btn)
       }
       const end = (e: Event) => {
         if (e.cancelable) e.preventDefault()
-        keysHeld.delete(key)
-        keyPressTime.delete(key)
-        btn.classList.remove('active')
+        deactivateKey(key, btn)
       }
 
       btn.addEventListener('touchstart', start, {passive: false})
       btn.addEventListener('touchend', end, {passive: false})
-      btn.addEventListener('touchcancel', end, {passive: false}) 
+      btn.addEventListener('touchcancel', end, {passive: false})
       btn.addEventListener('mousedown', start)
       btn.addEventListener('mouseup', end)
       btn.addEventListener('mouseleave', end)
@@ -2862,6 +3954,31 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     createBtn('dpad-down', 's')
     createBtn('dpad-left', 'a')
     createBtn('dpad-right', 'd')
+
+    // Handle touch-slide across D-pad buttons
+    dpad.addEventListener('touchmove', (e) => {
+      if (e.cancelable) e.preventDefault()
+      const touch = e.touches[0]
+      if (!touch) return
+      const el = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null
+      if (!el) return
+
+      for (const { btn, key } of dpadButtons) {
+        if (el === btn || btn.contains(el)) {
+          if (activeDpadKey !== key) {
+            // Deactivate old button, activate new one
+            dpadButtons.forEach(({ btn: ob, key: ok }) => {
+              if (ok !== key) { keysHeld.delete(ok); keyPressTime.delete(ok); ob.classList.remove('active') }
+            })
+            keysHeld.add(key)
+            keyPressTime.set(key, Date.now())
+            btn.classList.add('active')
+            activeDpadKey = key
+          }
+          return
+        }
+      }
+    }, { passive: false })
 
     // Action Button
     const actionContainer = document.createElement('div')
@@ -2882,6 +3999,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       const bombAtPlayer = bombs.find(b => b.x === playerGridX && b.y === playerGridY)
       if (bombAtPlayer && hasThrow) {
         throwBomb(lastDx, lastDy)
+      } else if (hasLineBomb && currentBombs < maxBombs) {
+        placeLineBomb(playerGridX, playerGridY, lastDx, lastDy, -1)
       } else {
         placeBomb(playerGridX, playerGridY)
       }
@@ -2897,6 +4016,20 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     actionBtn.addEventListener('mousedown', performAction)
     actionBtn.addEventListener('mouseup', endAction)
     actionBtn.addEventListener('mouseleave', endAction)
+
+    // Handle resizing to toggle controls visibility
+    window.addEventListener('resize', () => {
+      const isStillMobile = isMobile()
+      const pauseBtn = document.getElementById('mobile-pause-btn')
+
+      if (isStillMobile) {
+        mobileContainer.classList.add('mobile-controls-visible')
+        if (pauseBtn) pauseBtn.style.display = 'flex'
+      } else {
+        mobileContainer.classList.remove('mobile-controls-visible')
+        if (pauseBtn) pauseBtn.style.display = 'none'
+      }
+    })
   }
 
   
@@ -2987,15 +4120,19 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     // Check if there's a bomb at the target position - kick it!
     const bombAtTarget = bombs.find(b => b.x === targetX && b.y === targetY)
     if (bombAtTarget) {
-      if (hasKick) {
+      if (ghostTimer > 0) {
+        // Ghost mode: walk through bombs
+      } else if (hasKick) {
         kickBomb(dx, dy)
         lastMoveTime = currentTime
         return true
+      } else {
+        return false // Block movement if no kick ability
       }
-      return false // Block movement if no kick ability
     }
 
-    if (grid[targetY][targetX] === 'wall' || grid[targetY][targetX] === 'destructible') return false
+    if (grid[targetY][targetX] === 'wall') return false
+    if (grid[targetY][targetX] === 'destructible' && ghostTimer <= 0) return false
 
     // Check collision with enemies (blocking)
     if (enemies.some(e => e.lives > 0 && e.x === targetX && e.y === targetY)) return false
@@ -3034,9 +4171,18 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     if (targetX < 0 || targetY < 0 || targetX >= GRID_WIDTH || targetY >= GRID_HEIGHT) return false
 
     // Check bomb collision
-    if (bombs.some(b => b.x === targetX && b.y === targetY) && !player2HasKick) return false
+    if (bombs.some(b => b.x === targetX && b.y === targetY)) {
+      if (player2GhostTimer > 0) {
+        // Ghost mode: walk through bombs
+      } else if (player2HasKick) {
+        // Kick handled elsewhere
+      } else {
+        return false
+      }
+    }
 
-    if (grid[targetY][targetX] === 'wall' || grid[targetY][targetX] === 'destructible') return false
+    if (grid[targetY][targetX] === 'wall') return false
+    if (grid[targetY][targetX] === 'destructible' && player2GhostTimer <= 0) return false
 
     // Check collision with enemies (blocking)
     if (enemies.some(e => e.lives > 0 && e.x === targetX && e.y === targetY)) return false
@@ -3134,6 +4280,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       const bombAtPlayer = bombs.find(b => b.x === playerGridX && b.y === playerGridY)
       if (bombAtPlayer && hasThrow) {
         throwBomb(lastDx, lastDy)
+      } else if (hasLineBomb && currentBombs < maxBombs) {
+        placeLineBomb(playerGridX, playerGridY, lastDx, lastDy, -1)
       } else {
         placeBomb(playerGridX, playerGridY)
       }
@@ -3144,6 +4292,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       const bombAtPlayer2 = bombs.find(b => b.x === player2GridX && b.y === player2GridY)
       if (bombAtPlayer2 && player2HasThrow) {
         throwBombPlayer2(lastPlayer2Dx, lastPlayer2Dy)
+      } else if (player2HasLineBomb && player2CurrentBombs < player2MaxBombs) {
+        placeLineBomb(player2GridX, player2GridY, lastPlayer2Dx, lastPlayer2Dy, -2)
       } else {
         placeBombPlayer2(player2GridX, player2GridY)
       }
@@ -3298,6 +4448,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
 
   // Game loop update
   let lastTime = Date.now()
+  let lastUIUpdateTime = 0
+  const UI_UPDATE_INTERVAL = 250 // Update UI at most 4 times per second
   scene.onBeforeRenderObservable.add(() => {
     const currentTime = Date.now()
     const deltaTime = currentTime - lastTime
@@ -3377,7 +4529,12 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       // Update time attack
       if (gameMode === 'time-attack') {
         gameStateManager.updateTimeAttack(deltaTime)
-        updateUI()
+        
+        // Throttle UI updates to avoid heavy DOM manipulation every frame
+        if (currentTime - lastUIUpdateTime >= UI_UPDATE_INTERVAL) {
+          updateUI()
+          lastUIUpdateTime = currentTime
+        }
         
         if (gameStateManager.isTimeUp() && !gameOver) {
           gameOver = true
@@ -3424,6 +4581,11 @@ function startGame(mode: GameMode) {
   if (soundManager) {
       soundManager.resumeAudio()
   }
+
+  // Auto-enter fullscreen on mobile for maximum play area
+  if (isMobile()) {
+    toggleFullscreen()
+  }
   
   // Start paused for countdown
   isPaused = true
@@ -3452,6 +4614,19 @@ function startGame(mode: GameMode) {
     // Play tick sound for each countdown number
     if (soundManager) soundManager.playSFX('countdown-tick')
   })
+}
+
+// Fullscreen toggle for mobile
+function toggleFullscreen() {
+  const doc = document as any
+  if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+    const el = document.documentElement as any
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {})
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen()
+  } else {
+    if (doc.exitFullscreen) doc.exitFullscreen().catch(() => {})
+    else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen()
+  }
 }
 
 // Create pause menu
@@ -3567,50 +4742,38 @@ document.addEventListener('click', (e) => {
   }
 }, true)
 
-// Add event listeners for all menu buttons
-setTimeout(() => {
-  const settingsButton = document.getElementById('settings-button')
-  const statsButton = document.getElementById('stats-button')
-  const achievementsButton = document.getElementById('achievements-button')
-  const tutorialButton = document.getElementById('tutorial-button')
-  const mapSelectionButton = document.getElementById('map-selection-button')
+// Add event listeners for menu buttons via event delegation (no setTimeout race condition)
+mainMenu.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement
+  const button = target.closest('button')
+  if (!button) return
   
-  if (settingsButton) {
-    settingsButton.addEventListener('click', () => {
+  switch (button.id) {
+    case 'settings-button':
       mainMenu.style.display = 'none'
       settingsMenu.style.display = 'flex'
-    })
-  }
-  
-  if (statsButton) {
-    statsButton.addEventListener('click', () => {
+      break
+    case 'stats-button':
       mainMenu.style.display = 'none'
       statsScreen.style.display = 'flex'
-    })
-  }
-  
-  if (achievementsButton) {
-    achievementsButton.addEventListener('click', () => {
-      // Refresh achievements before showing
+      break
+    case 'achievements-button':
       if ((achievementsScreen as any).refresh) {
         ;(achievementsScreen as any).refresh()
       }
       mainMenu.style.display = 'none'
       achievementsScreen.style.display = 'flex'
-    })
-  }
-  
-  if (tutorialButton) {
-    tutorialButton.addEventListener('click', () => {
+      break
+    case 'tutorial-button':
       mainMenu.style.display = 'none'
       tutorialScreen.style.display = 'flex'
-    })
-  }
-  
-  if (mapSelectionButton) {
-    mapSelectionButton.addEventListener('click', () => {
+      break
+    case 'map-selection-button':
       mainMenu.style.display = 'none'
       mapSelectionScreen.style.display = 'flex'
-    })
+      break
+    case 'fullscreen-button':
+      toggleFullscreen()
+      break
   }
-}, 100)
+})

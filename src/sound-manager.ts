@@ -51,11 +51,24 @@ export class SoundManager {
     this.sounds.set(name, sound)
   }
 
-  // Play a sound effect
+  // Play a sound effect (allows overlapping by cloning short-lived copies)
   playSFX(name: string) {
     const sound = this.sounds.get(name)
-    if (sound && !sound.isPlaying) {
+    if (!sound) return
+    if (!sound.isPlaying) {
       sound.play()
+    } else {
+      // Clone so the same SFX can overlap (e.g. rapid explosions)
+      try {
+        const clone = sound.clone()
+        if (clone) {
+          clone.setVolume(this.sfxVolume)
+          clone.onEndedObservable.addOnce(() => clone.dispose())
+          clone.play()
+        }
+      } catch {
+        // Fallback: skip overlap if clone fails
+      }
     }
   }
 

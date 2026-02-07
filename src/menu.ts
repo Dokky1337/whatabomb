@@ -76,7 +76,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
   
   // Subtitle
   const subtitle = document.createElement('p')
-  subtitle.textContent = 'By Fredrik Dokken, V3.0'
+  subtitle.textContent = 'By Fredrik, V4.0'
   subtitle.style.fontSize = '16px'
   subtitle.style.color = '#aaa'
   subtitle.style.marginTop = '-30px'
@@ -99,7 +99,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
   const currentIsMobile = isMobile()
 
   const modes = currentIsMobile
-    ? allModes.filter(m => m.mode !== 'pvp' && m.mode !== 'survival' && m.mode !== 'time-attack')
+    ? allModes.filter(m => m.mode !== 'pvp')
     : allModes
 
   // Button container for game modes
@@ -171,6 +171,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
     { id: 'achievements-button', text: '🏆 Achievements' },
     { id: 'tutorial-button', text: '📖 How to Play' },
     { id: 'map-selection-button', text: '🗺️ Maps' },
+    ...(currentIsMobile ? [{ id: 'fullscreen-button', text: '⛶ Fullscreen' }] : []),
   ]
 
   buttons.forEach(btn => {
