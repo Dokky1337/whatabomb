@@ -6,7 +6,7 @@ export class SoundManager {
   private sounds: Map<string, AudioBuffer> = new Map()
   private musicSounds: Set<string> = new Set()
   private ctx: AudioContext
-  private musicVolume: number = 0.05
+  private musicVolume: number = 0.2
   private sfxVolume: number = 0.7
   private currentMusicSource: AudioBufferSourceNode | null = null
   private musicGain: GainNode
