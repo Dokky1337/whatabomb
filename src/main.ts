@@ -274,6 +274,25 @@ function gridToWorld(x: number, y: number): Vector3 {
   )
 }
 
+// Reusable Vector3 for hot-path gridToWorld calls (avoids per-frame allocation)
+const _tmpGridVec = new Vector3()
+function gridToWorldInPlace(x: number, y: number, out: Vector3): Vector3 {
+  out.copyFromFloats(
+    (x - GRID_WIDTH / 2 + 0.5) * TILE_SIZE,
+    TILE_SIZE / 2,
+    (y - GRID_HEIGHT / 2 + 0.5) * TILE_SIZE,
+  )
+  return out
+}
+
+// Helper: set visibility on all child meshes of a TransformNode
+function setCharacterVisibility(root: TransformNode, value: number) {
+  const meshes = (root as any)._cachedChildMeshes || root.getChildMeshes()
+  for (let i = 0; i < meshes.length; i++) {
+    meshes[i].visibility = value
+  }
+}
+
 function createScene(engine: Engine, gameMode: GameMode): Scene {
   const scene = new Scene(engine)
   
@@ -391,6 +410,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   camera.inputs.clear()
   
   // Screen shake function
+  const activeShakeIntervals: ReturnType<typeof setInterval>[] = []
   function screenShake(intensity: number = 0.3, duration: number = 200) {
     if (!settingsManager.getSettings().screenShake) return
     
@@ -402,6 +422,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       if (elapsed >= duration) {
         camera.position.copyFrom(originalPosition)
         clearInterval(shakeInterval)
+        const idx = activeShakeIntervals.indexOf(shakeInterval)
+        if (idx !== -1) activeShakeIntervals.splice(idx, 1)
         return
       }
       
@@ -412,7 +434,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       camera.position.y = originalPosition.y + (Math.random() - 0.5) * currentIntensity
       camera.position.z = originalPosition.z + (Math.random() - 0.5) * currentIntensity
     }, 16)
+    activeShakeIntervals.push(shakeInterval)
   }
+
+  // Clean up timers on scene dispose
+  scene.onDisposeObservable.add(() => {
+    activeShakeIntervals.forEach(clearInterval)
+    activeShakeIntervals.length = 0
+  })
 
   // Better lighting for 3D effect
   const light = new HemisphericLight('light', new Vector3(0, 1, 0), scene)
@@ -1334,6 +1363,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       head = MeshBuilder.CreateSphere(name + '-head', { diameter: T * 0.38, segments: 10 }, scene)
       head.material = skinMat
 
+      // Shared inner ear material
+      const pinkMat = new StandardMaterial(name + '-pinkMat', scene)
+      pinkMat.diffuseColor = new Color3(1, 0.65, 0.7)
+      pinkMat.specularColor = new Color3(0, 0, 0)
+
       // Pointed ears
       for (const side of [-1, 1]) {
         const ear = MeshBuilder.CreateCylinder(name + '-ear' + side, {
@@ -1348,9 +1382,6 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         const earInner = MeshBuilder.CreateCylinder(name + '-earIn' + side, {
           height: 0.12, diameterTop: 0, diameterBottom: 0.08, tessellation: 4
         }, scene)
-        const pinkMat = new StandardMaterial(name + '-pinkMat', scene)
-        pinkMat.diffuseColor = new Color3(1, 0.65, 0.7)
-        pinkMat.specularColor = new Color3(0, 0, 0)
         earInner.material = pinkMat
         earInner.position.y = 0.01
         earInner.parent = ear
@@ -1452,6 +1483,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     const eyeForward = shape === 'dog' ? 0.17 : 0.14
     const eyeHeight = shape === 'cat' ? 0.03 : 0.04
 
+    // Shared enemy eye material (hoisted outside loop)
+    let enemyEyeMat: StandardMaterial | null = null
+    if (name.includes('enemy')) {
+      enemyEyeMat = new StandardMaterial(name + '-enemyEyeMat', scene)
+      enemyEyeMat.diffuseColor = new Color3(0.9, 0.1, 0.1)
+      enemyEyeMat.emissiveColor = new Color3(0.6, 0, 0)
+    }
+
     for (const side of [-1, 1]) {
       // Sclera (white)
       const sclera = MeshBuilder.CreateSphere(name + '-sclera' + side, { diameter: T * 0.1, segments: 8 }, scene)
@@ -1466,11 +1505,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       pupil.scaling.z = 0.5
       pupil.parent = sclera
 
-      if (name.includes('enemy')) {
-        // Enemies get menacing red eyes
-        const enemyEyeMat = new StandardMaterial(name + '-enemyEyeMat' + side, scene)
-        enemyEyeMat.diffuseColor = new Color3(0.9, 0.1, 0.1)
-        enemyEyeMat.emissiveColor = new Color3(0.6, 0, 0)
+      if (enemyEyeMat) {
         pupil.material = enemyEyeMat
       } else {
         pupil.material = darkMat
@@ -1680,6 +1715,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   }
 
   const player = createPlayerSprite('player', null, '🧑', settings.player1Color)
+  ;(player as any)._cachedChildMeshes = player.getChildMeshes()
   let playerGridX = 1
   let playerGridY = 1
   const playerPos = gridToWorld(playerGridX, playerGridY)
@@ -1755,6 +1791,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     enemy.mesh.position.x = enemyPos.x
     enemy.mesh.position.y = TILE_SIZE * 0.5
     enemy.mesh.position.z = enemyPos.z
+    ;(enemy.mesh as any)._cachedChildMeshes = enemy.mesh.getChildMeshes()
     enemies.push(enemy)
   }
 
@@ -1786,13 +1823,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   let player2VisualX = 0
   let player2VisualZ = 0
 
-  const player2Material = new StandardMaterial('player2Mat', scene)
-  player2Material.diffuseColor = new Color3(0.1, 0.1, 0.9)
-  player2Material.specularColor = new Color3(0, 0, 0)
-
   let player2: any = null
   if (gameMode === 'pvp') {
     player2 = createPlayerSprite('player2', null, '👤', settings.player2Color)
+    ;(player2 as any)._cachedChildMeshes = player2.getChildMeshes()
     const player2Pos = gridToWorld(player2GridX, player2GridY)
     player2.position.x = player2Pos.x
     player2.position.y = TILE_SIZE * 0.5
@@ -1810,6 +1844,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   // Chain reaction tracking
   let chainReactionCount = 0
   let chainReactionTimer: ReturnType<typeof setTimeout> | null = null
+
+  // Clean up chain reaction timer on scene dispose
+  scene.onDisposeObservable.add(() => {
+    if (chainReactionTimer) { clearTimeout(chainReactionTimer); chainReactionTimer = null }
+  })
 
   // Enemy stats (for AI) - each enemy has their own stats
   const enemyStats = enemies.map(() => ({
@@ -1845,12 +1884,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     pauseBtn.style.fontSize = '20px'
     pauseBtn.style.backdropFilter = 'blur(4px)'
     
-    pauseBtn.addEventListener('touchstart', (e) => {
+    pauseBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    })
-    pauseBtn.addEventListener('click', () => {
-       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     })
     
     document.body.appendChild(pauseBtn)
@@ -2211,8 +2247,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         })
         restartBtn.addEventListener('click', () => {
           overlay.remove()
-          playerUIDiv.style.display = 'none'
-          opponentUIDiv.style.display = 'none'
+          playerUIDiv.remove()
+          opponentUIDiv.remove()
+          centerUIDiv.remove()
           startGame(gameMode)
         })
         buttonContainer.appendChild(restartBtn)
@@ -2243,8 +2280,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         })
         menuBtn.addEventListener('click', () => {
           overlay.remove()
-          playerUIDiv.style.display = 'none'
-          opponentUIDiv.style.display = 'none'
+          playerUIDiv.remove()
+          opponentUIDiv.remove()
+          centerUIDiv.remove()
           mainMenu.style.display = 'flex'
           
           if (currentEngine) {
@@ -2566,26 +2604,43 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     if (placed > 0) haptic(30)
   }
 
+  // Shared particle constants (avoid per-system allocations)
+  let _sharedFlareTexture: Texture | null = null
+  function getSharedFlareTexture(): Texture {
+    if (_sharedFlareTexture) return _sharedFlareTexture
+    try {
+      _sharedFlareTexture = new Texture(FLARE_TEXTURE_DATA_URI, scene)
+    } catch (e) {
+      _sharedFlareTexture = new Texture('', scene)
+    }
+    return _sharedFlareTexture!
+  }
+  const FIRE_COLOR1 = new Color4(1, 0.8, 0.2, 1)
+  const FIRE_COLOR2 = new Color4(1, 0.3, 0, 1)
+  const FIRE_COLOR_DEAD = new Color4(0.2, 0.2, 0.2, 0)
+  const FIRE_GRAVITY = new Vector3(0, 2, 0)
+  const FIRE_DIR1 = new Vector3(-1.5, 2, -1.5)
+  const FIRE_DIR2 = new Vector3(1.5, 3, 1.5)
+  const SMOKE_COLOR1 = new Color4(0.9, 0.9, 0.9, 0.8)
+  const SMOKE_COLOR2 = new Color4(0.7, 0.7, 0.7, 0.6)
+  const SMOKE_COLOR_DEAD = new Color4(0.5, 0.5, 0.5, 0)
+  const SMOKE_GRAVITY = new Vector3(0, 0.5, 0)
+  const SMOKE_DIR1 = new Vector3(-0.5, 0.5, -0.5)
+  const SMOKE_DIR2 = new Vector3(0.5, 1.5, 0.5)
+
   // Create particle system for explosions
   function createExplosionParticles(x: number, y: number) {
     const particleSystem = new ParticleSystem('explosion', 50, scene)
     
-    // Create a simple emitter point
-    const emitter = MeshBuilder.CreateSphere('emitter', { diameter: 0.1 }, scene)
-    emitter.position = gridToWorld(x, y)
-    emitter.isVisible = false
-    particleSystem.emitter = emitter
+    // Use Vector3 emitter directly (no mesh allocation needed)
+    particleSystem.emitter = gridToWorld(x, y)
 
-    try {
-      particleSystem.particleTexture = new Texture(FLARE_TEXTURE_DATA_URI, scene)
-    } catch (e) {
-      particleSystem.particleTexture = new Texture('', scene)
-    }
+    particleSystem.particleTexture = getSharedFlareTexture()
     
-    // More dramatic fire colors
-    particleSystem.color1 = new Color4(1, 0.8, 0.2, 1)  // Bright yellow
-    particleSystem.color2 = new Color4(1, 0.3, 0, 1)    // Orange-red
-    particleSystem.colorDead = new Color4(0.2, 0.2, 0.2, 0)  // Fade to grey, not reddish black
+    // Use shared color/direction constants
+    particleSystem.color1 = FIRE_COLOR1
+    particleSystem.color2 = FIRE_COLOR2
+    particleSystem.colorDead = FIRE_COLOR_DEAD
 
     particleSystem.minSize = 0.15
     particleSystem.maxSize = 0.4
@@ -2596,10 +2651,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     particleSystem.emitRate = 300
     particleSystem.blendMode = ParticleSystem.BLENDMODE_ADD
 
-    particleSystem.gravity = new Vector3(0, 2, 0)  // Float up like fire
+    particleSystem.gravity = FIRE_GRAVITY
 
-    particleSystem.direction1 = new Vector3(-1.5, 2, -1.5)
-    particleSystem.direction2 = new Vector3(1.5, 3, 1.5)
+    particleSystem.direction1 = FIRE_DIR1
+    particleSystem.direction2 = FIRE_DIR2
 
     particleSystem.minEmitPower = 3
     particleSystem.maxEmitPower = 6
@@ -2611,8 +2666,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     setTimeout(() => {
       particleSystem.stop()
       setTimeout(() => {
-        particleSystem.dispose()
-        emitter.dispose()
+        if (!scene.isDisposed) particleSystem.dispose()
       }, 400)
     }, 150)
   }
@@ -2642,16 +2696,14 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
   function createSmokeParticles(x: number, y: number) {
     const smokeSystem = new ParticleSystem('smoke', 50, scene)
     
-    const emitter = MeshBuilder.CreateSphere('smoke-emitter', { diameter: 0.1 }, scene)
-    emitter.position = gridToWorld(x, y)
-    emitter.isVisible = false
-    smokeSystem.emitter = emitter
+    // Use Vector3 emitter directly (no mesh allocation needed)
+    smokeSystem.emitter = gridToWorld(x, y)
     
     smokeSystem.particleTexture = getSharedSmokeTexture()
 
-    smokeSystem.color1 = new Color4(0.9, 0.9, 0.9, 0.8) // White-ish, high opacity
-    smokeSystem.color2 = new Color4(0.7, 0.7, 0.7, 0.6) // Light Gray
-    smokeSystem.colorDead = new Color4(0.5, 0.5, 0.5, 0) // Fade to invisible gray
+    smokeSystem.color1 = SMOKE_COLOR1
+    smokeSystem.color2 = SMOKE_COLOR2
+    smokeSystem.colorDead = SMOKE_COLOR_DEAD
     
     smokeSystem.minSize = 0.4
     smokeSystem.maxSize = 0.8
@@ -2660,11 +2712,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     smokeSystem.maxLifeTime = 1.5
     
     smokeSystem.emitRate = 80
-    smokeSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD // Alpha blending for opaque smoke
+    smokeSystem.blendMode = ParticleSystem.BLENDMODE_STANDARD
     
-    smokeSystem.gravity = new Vector3(0, 0.5, 0)
-    smokeSystem.direction1 = new Vector3(-0.5, 0.5, -0.5)
-    smokeSystem.direction2 = new Vector3(0.5, 1.5, 0.5)
+    smokeSystem.gravity = SMOKE_GRAVITY
+    smokeSystem.direction1 = SMOKE_DIR1
+    smokeSystem.direction2 = SMOKE_DIR2
     
     smokeSystem.minEmitPower = 0.5
     smokeSystem.maxEmitPower = 1.2
@@ -2674,8 +2726,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     setTimeout(() => {
       smokeSystem.stop()
       setTimeout(() => {
-        smokeSystem.dispose()
-        emitter.dispose()
+        if (!scene.isDisposed) smokeSystem.dispose()
       }, 2000)
     }, 300)
   }
@@ -3005,6 +3056,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
                   enemy.mesh.position.x = enemyPos.x
                   enemy.mesh.position.y = TILE_SIZE * 0.5
                   enemy.mesh.position.z = enemyPos.z
+                  ;(enemy.mesh as any)._cachedChildMeshes = enemy.mesh.getChildMeshes()
                   enemies.push(enemy)
                   
                   // Add stats for new enemy
@@ -3259,22 +3311,22 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     // Player 1
     if (playerInvulnerable) {
       playerInvulnerableTimer -= deltaTime
-      player.visibility = Math.sin(Date.now() / 100) > 0 ? 0.5 : 1
+      setCharacterVisibility(player, Math.sin(Date.now() / 100) > 0 ? 0.5 : 1)
       
       if (playerInvulnerableTimer <= 0) {
         playerInvulnerable = false
-        player.visibility = 1
+        setCharacterVisibility(player, 1)
       }
     }
 
     // Player 2 (PvP mode)
     if (gameMode === 'pvp' && player2Invulnerable && player2) {
       player2InvulnerableTimer -= deltaTime
-      player2.visibility = Math.sin(Date.now() / 100) > 0 ? 0.5 : 1
+      setCharacterVisibility(player2, Math.sin(Date.now() / 100) > 0 ? 0.5 : 1)
       
       if (player2InvulnerableTimer <= 0) {
         player2Invulnerable = false
-        player2.visibility = 1
+        setCharacterVisibility(player2, 1)
       }
     }
 
@@ -3282,11 +3334,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     enemies.forEach(enemy => {
       if (enemy.invulnerable) {
         enemy.invulnerableTimer -= deltaTime
-        enemy.mesh.visibility = Math.sin(Date.now() / 100) > 0 ? 0.5 : 1
+        setCharacterVisibility(enemy.mesh, Math.sin(Date.now() / 100) > 0 ? 0.5 : 1)
         
         if (enemy.invulnerableTimer <= 0) {
           enemy.invulnerable = false
-          enemy.mesh.visibility = 1
+          setCharacterVisibility(enemy.mesh, 1)
         }
       }
     })
@@ -3295,19 +3347,19 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     if (ghostTimer > 0) {
       ghostTimer -= deltaTime
       // Visual: ghostly flicker
-      player.visibility = 0.5 + Math.sin(Date.now() / 150) * 0.2
+      setCharacterVisibility(player, 0.5 + Math.sin(Date.now() / 150) * 0.2)
       if (ghostTimer <= 0) {
         ghostTimer = 0
-        player.visibility = playerInvulnerable ? player.visibility : 1
+        setCharacterVisibility(player, playerInvulnerable ? 0.5 : 1)
         console.log('Player 1: Ghost mode expired!')
       }
     }
     if (player2GhostTimer > 0) {
       player2GhostTimer -= deltaTime
-      if (player2) player2.visibility = 0.5 + Math.sin(Date.now() / 150) * 0.2
+      if (player2) setCharacterVisibility(player2, 0.5 + Math.sin(Date.now() / 150) * 0.2)
       if (player2GhostTimer <= 0) {
         player2GhostTimer = 0
-        if (player2) player2.visibility = player2Invulnerable ? player2.visibility : 1
+        if (player2) setCharacterVisibility(player2, player2Invulnerable ? 0.5 : 1)
         console.log('Player 2: Ghost mode expired!')
       }
     }
@@ -3980,6 +4032,20 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       }
     }, { passive: false })
 
+    // Safety: clear all D-pad keys if touch ends outside any button (ghost key prevention)
+    dpad.addEventListener('touchend', () => {
+      dpadButtons.forEach(({ btn: ob, key: ok }) => {
+        keysHeld.delete(ok); keyPressTime.delete(ok); ob.classList.remove('active')
+      })
+      activeDpadKey = null
+    }, { passive: false })
+    dpad.addEventListener('touchcancel', () => {
+      dpadButtons.forEach(({ btn: ob, key: ok }) => {
+        keysHeld.delete(ok); keyPressTime.delete(ok); ob.classList.remove('active')
+      })
+      activeDpadKey = null
+    }, { passive: false })
+
     // Action Button
     const actionContainer = document.createElement('div')
     actionContainer.className = 'action-btn-container'
@@ -4018,7 +4084,7 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     actionBtn.addEventListener('mouseleave', endAction)
 
     // Handle resizing to toggle controls visibility
-    window.addEventListener('resize', () => {
+    const mobileResizeHandler = () => {
       const isStillMobile = isMobile()
       const pauseBtn = document.getElementById('mobile-pause-btn')
 
@@ -4029,6 +4095,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
         mobileContainer.classList.remove('mobile-controls-visible')
         if (pauseBtn) pauseBtn.style.display = 'none'
       }
+    }
+    window.addEventListener('resize', mobileResizeHandler)
+    scene.onDisposeObservable.add(() => {
+      window.removeEventListener('resize', mobileResizeHandler)
     })
   }
 
@@ -4326,7 +4396,17 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
     indicatorContainer.remove()
   })
 
+  const _indicatorIdentity = Matrix.Identity()
+  const _indicatorTargetPos = new Vector3()
+  let lastIndicatorUpdate = 0
+  const INDICATOR_UPDATE_INTERVAL = 100 // Throttle to ~10fps
+
   function updateOffscreenIndicators() {
+    // Throttle indicator updates to reduce DOM writes + projection overhead
+    const now = Date.now()
+    if (now - lastIndicatorUpdate < INDICATOR_UPDATE_INTERVAL) return
+    lastIndicatorUpdate = now
+
     // Collect all targets (enemies + player 2 if in PVP)
     const targets: { id: string, x: number, z: number, color: string, active: boolean }[] = []
     
@@ -4334,8 +4414,8 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       if (enemy.lives > 0) {
         // Find the color used for this enemy or default to red
         const color = (idx < enemyColors.length) ? enemyColors[idx] : '#ff4444'
-        const pos = gridToWorld(enemy.x, enemy.y)
-        targets.push({ id: `enemy-${idx}`, x: pos.x, z: pos.z, color, active: true })
+        gridToWorldInPlace(enemy.x, enemy.y, _tmpGridVec)
+        targets.push({ id: `enemy-${idx}`, x: _tmpGridVec.x, z: _tmpGridVec.z, color, active: true })
       }
     })
 
@@ -4358,11 +4438,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
             activeIndicators.set(target.id, indicator)
         }
 
-        // Project position to screen space
-        const targetPos = new Vector3(target.x, TILE_SIZE/2, target.z)
+        // Project position to screen space (reuse cached objects)
+        _indicatorTargetPos.copyFromFloats(target.x, TILE_SIZE/2, target.z)
         const screenPos = Vector3.Project(
-            targetPos,
-            Matrix.Identity(),
+            _indicatorTargetPos,
+            _indicatorIdentity,
             scene.getTransformMatrix(),
             camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight())
         )
@@ -4459,19 +4539,19 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       // Process held keys for smooth continuous movement
       processHeldKeys()
       
-      // Smooth movement interpolation for player 1
-      const targetPos1 = gridToWorld(playerGridX, playerGridY)
+      // Smooth movement interpolation for player 1 (reuse _tmpGridVec to avoid allocations)
+      gridToWorldInPlace(playerGridX, playerGridY, _tmpGridVec)
       const lerpFactor = Math.min(1, MOVE_LERP_SPEED * deltaTime / 1000)
-      playerVisualX += (targetPos1.x - playerVisualX) * lerpFactor
-      playerVisualZ += (targetPos1.z - playerVisualZ) * lerpFactor
+      playerVisualX += (_tmpGridVec.x - playerVisualX) * lerpFactor
+      playerVisualZ += (_tmpGridVec.z - playerVisualZ) * lerpFactor
       player.position.x = playerVisualX
       player.position.z = playerVisualZ
       
       // Smooth movement interpolation for player 2 (PvP mode)
       if (gameMode === 'pvp' && player2) {
-        const targetPos2 = gridToWorld(player2GridX, player2GridY)
-        player2VisualX += (targetPos2.x - player2VisualX) * lerpFactor
-        player2VisualZ += (targetPos2.z - player2VisualZ) * lerpFactor
+        gridToWorldInPlace(player2GridX, player2GridY, _tmpGridVec)
+        player2VisualX += (_tmpGridVec.x - player2VisualX) * lerpFactor
+        player2VisualZ += (_tmpGridVec.z - player2VisualZ) * lerpFactor
         player2.position.x = player2VisualX
         player2.position.z = player2VisualZ
       }
@@ -4479,9 +4559,9 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
       // Smooth movement interpolation for enemies
       enemies.forEach(enemy => {
         if (enemy.lives > 0 && enemy.visualX !== undefined && enemy.visualZ !== undefined) {
-          const targetEnemyPos = gridToWorld(enemy.x, enemy.y)
-          enemy.visualX += (targetEnemyPos.x - enemy.visualX) * lerpFactor
-          enemy.visualZ += (targetEnemyPos.z - enemy.visualZ) * lerpFactor
+          gridToWorldInPlace(enemy.x, enemy.y, _tmpGridVec)
+          enemy.visualX += (_tmpGridVec.x - enemy.visualX) * lerpFactor
+          enemy.visualZ += (_tmpGridVec.z - enemy.visualZ) * lerpFactor
           enemy.mesh.position.x = enemy.visualX
           enemy.mesh.position.z = enemy.visualZ
         }
@@ -4590,11 +4670,14 @@ function startGame(mode: GameMode) {
   // Start paused for countdown
   isPaused = true
 
-  // Handle resize
+  // Handle resize — remove previous listener to prevent accumulation
   const resize = () => {
     currentEngine?.resize()
   }
   window.addEventListener('resize', resize)
+  currentScene.onDisposeObservable.add(() => {
+    window.removeEventListener('resize', resize)
+  })
 
   currentEngine.runRenderLoop(() => {
     if (currentScene) {
