@@ -4,7 +4,7 @@ export function isMobile(): boolean {
 
 /** Detect if running on iOS (Safari only supports fullscreen for video/audio) */
 export function isIOS(): boolean {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window)
 }
 
 let hapticsEnabled = true
