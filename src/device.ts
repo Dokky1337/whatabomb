@@ -2,6 +2,11 @@ export function isMobile(): boolean {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 800;
 }
 
+/** Detect if running on iOS (Safari only supports fullscreen for video/audio) */
+export function isIOS(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
+}
+
 let hapticsEnabled = true
 
 /** Enable or disable haptic feedback globally. */

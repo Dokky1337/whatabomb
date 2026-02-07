@@ -1,6 +1,6 @@
 import { FLARE_TEXTURE_DATA_URI } from './assets'
 import './style.css'
-import { isMobile, haptic, setHapticsEnabled } from './device'
+import { isMobile, haptic, setHapticsEnabled, isIOS } from './device'
 import {
   ArcRotateCamera,
   Camera,
@@ -4699,8 +4699,8 @@ function startGame(mode: GameMode) {
       soundManager.resumeAudio()
   }
 
-  // Auto-enter fullscreen on mobile for maximum play area
-  if (isMobile()) {
+  // Auto-enter fullscreen on mobile for maximum play area (Android only — iOS doesn't support fullscreen API)
+  if (isMobile() && !isIOS()) {
     toggleFullscreen()
   }
   

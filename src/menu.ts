@@ -1,4 +1,4 @@
-import { isMobile } from './device'
+import { isMobile, isIOS } from './device'
 
 export type GameMode = '1v1' | '1v2' | '1v3' | 'pvp' | 'time-attack' | 'survival'
 
@@ -171,7 +171,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
     { id: 'achievements-button', text: '🏆 Achievements' },
     { id: 'tutorial-button', text: '📖 How to Play' },
     { id: 'map-selection-button', text: '🗺️ Maps' },
-    ...(currentIsMobile ? [{ id: 'fullscreen-button', text: '⛶ Fullscreen' }] : []),
+    ...(currentIsMobile && !isIOS() ? [{ id: 'fullscreen-button', text: '⛶ Fullscreen' }] : []),
   ]
 
   buttons.forEach(btn => {
