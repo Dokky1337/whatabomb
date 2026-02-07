@@ -268,6 +268,7 @@ function createSliderSetting(
 
   const labelText = document.createElement('span')
   labelText.textContent = label
+  labelText.style.cursor = 'pointer'
 
   const valueText = document.createElement('span')
   valueText.textContent = `${Math.round(initialValue * 100)}%`
@@ -277,6 +278,95 @@ function createSliderSetting(
 
   labelDiv.appendChild(labelText)
   labelDiv.appendChild(valueText)
+
+  // +/- buttons row
+  const controlsRow = document.createElement('div')
+  controlsRow.style.display = 'flex'
+  controlsRow.style.alignItems = 'center'
+  controlsRow.style.gap = '8px'
+  controlsRow.style.marginBottom = '6px'
+
+  const minusBtn = document.createElement('button')
+  minusBtn.textContent = '➖'
+  minusBtn.style.fontSize = '18px'
+  minusBtn.style.background = 'rgba(255,255,255,0.1)'
+  minusBtn.style.border = '2px solid rgba(255,255,255,0.2)'
+  minusBtn.style.borderRadius = '8px'
+  minusBtn.style.padding = '6px 12px'
+  minusBtn.style.cursor = 'pointer'
+  minusBtn.style.color = 'white'
+  minusBtn.style.transition = 'background 0.1s'
+
+  const muteBtn = document.createElement('button')
+  let savedVolume = initialValue
+  let isMuted = initialValue === 0
+  muteBtn.textContent = isMuted ? '🔇' : (label.includes('Music') ? '🎵' : '🔊')
+  muteBtn.style.fontSize = '18px'
+  muteBtn.style.background = isMuted ? 'rgba(255,60,60,0.2)' : 'rgba(255,255,255,0.1)'
+  muteBtn.style.border = '2px solid ' + (isMuted ? 'rgba(255,60,60,0.4)' : 'rgba(255,255,255,0.2)')
+  muteBtn.style.borderRadius = '8px'
+  muteBtn.style.padding = '6px 12px'
+  muteBtn.style.cursor = 'pointer'
+  muteBtn.style.color = 'white'
+  muteBtn.style.transition = 'background 0.1s'
+
+  const plusBtn = document.createElement('button')
+  plusBtn.textContent = '➕'
+  plusBtn.style.fontSize = '18px'
+  plusBtn.style.background = 'rgba(255,255,255,0.1)'
+  plusBtn.style.border = '2px solid rgba(255,255,255,0.2)'
+  plusBtn.style.borderRadius = '8px'
+  plusBtn.style.padding = '6px 12px'
+  plusBtn.style.cursor = 'pointer'
+  plusBtn.style.color = 'white'
+  plusBtn.style.transition = 'background 0.1s'
+
+  controlsRow.appendChild(minusBtn)
+  controlsRow.appendChild(muteBtn)
+  controlsRow.appendChild(plusBtn)
+
+  const updateUI = (val: number) => {
+    slider.value = String(Math.round(val * 100))
+    valueText.textContent = `${Math.round(val * 100)}%`
+    sliderFill.style.width = `${Math.round(val * 100)}%`
+    isMuted = val === 0
+    muteBtn.textContent = isMuted ? '🔇' : (label.includes('Music') ? '🎵' : '🔊')
+    muteBtn.style.background = isMuted ? 'rgba(255,60,60,0.2)' : 'rgba(255,255,255,0.1)'
+    muteBtn.style.border = '2px solid ' + (isMuted ? 'rgba(255,60,60,0.4)' : 'rgba(255,255,255,0.2)')
+  }
+
+  minusBtn.addEventListener('click', () => {
+    const current = parseInt(slider.value) / 100
+    const newVal = Math.max(0, current - 0.05)
+    if (newVal > 0) savedVolume = newVal
+    updateUI(newVal)
+    onChange(newVal)
+  })
+
+  plusBtn.addEventListener('click', () => {
+    const current = parseInt(slider.value) / 100
+    const newVal = Math.min(1, current + 0.05)
+    savedVolume = newVal
+    updateUI(newVal)
+    onChange(newVal)
+  })
+
+  muteBtn.addEventListener('click', () => {
+    if (isMuted) {
+      const restore = savedVolume > 0 ? savedVolume : 0.2
+      updateUI(restore)
+      onChange(restore)
+    } else {
+      savedVolume = parseInt(slider.value) / 100 || 0.2
+      updateUI(0)
+      onChange(0)
+    }
+  })
+
+  // Also allow clicking the label text to mute
+  labelText.addEventListener('click', () => {
+    muteBtn.click()
+  })
 
   const sliderContainer = document.createElement('div')
   sliderContainer.style.position = 'relative'
@@ -313,6 +403,11 @@ function createSliderSetting(
     const value = parseInt(slider.value) / 100
     valueText.textContent = `${slider.value}%`
     sliderFill.style.width = `${slider.value}%`
+    if (value > 0) savedVolume = value
+    isMuted = value === 0
+    muteBtn.textContent = isMuted ? '🔇' : (label.includes('Music') ? '🎵' : '🔊')
+    muteBtn.style.background = isMuted ? 'rgba(255,60,60,0.2)' : 'rgba(255,255,255,0.1)'
+    muteBtn.style.border = '2px solid ' + (isMuted ? 'rgba(255,60,60,0.4)' : 'rgba(255,255,255,0.2)')
     onChange(value)
   })
 
@@ -320,6 +415,7 @@ function createSliderSetting(
   sliderContainer.appendChild(slider)
 
   section.appendChild(labelDiv)
+  section.appendChild(controlsRow)
   section.appendChild(sliderContainer)
 
   return section

@@ -76,7 +76,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
   
   // Subtitle
   const subtitle = document.createElement('p')
-  subtitle.textContent = 'By Fredrik, V5.0.0'
+  subtitle.textContent = 'By Fredrik, V5.0.1'
   subtitle.style.fontSize = '16px'
   subtitle.style.color = '#aaa'
   subtitle.style.marginTop = '-30px'
@@ -99,7 +99,7 @@ export function createMainMenu(options: MenuOptions): HTMLDivElement {
   const currentIsMobile = isMobile()
 
   const modes = currentIsMobile
-    ? allModes.filter(m => m.mode !== 'pvp')
+    ? allModes.filter(m => m.mode !== 'pvp' && m.mode !== 'survival' && m.mode !== 'time-attack')
     : allModes
 
   // Button container for game modes

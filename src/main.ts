@@ -2913,11 +2913,11 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
           
           if (settings.extendedPowerUps) {
             // Extended pool: 10 power-up types
-            if (rand < 0.18) {
-              powerUpType = 'extraBomb'     // 18%
-            } else if (rand < 0.33) {
-              powerUpType = 'largerBlast'   // 15%
-            } else if (rand < 0.41) {
+            if (rand < 0.16) {
+              powerUpType = 'extraBomb'     // 16%
+            } else if (rand < 0.36) {
+              powerUpType = 'largerBlast'   // 20%
+            } else if (rand < 0.44) {
               powerUpType = 'kick'          // 8%
             } else if (rand < 0.49) {
               powerUpType = 'throw'         // 8%
@@ -2936,10 +2936,10 @@ function createScene(engine: Engine, gameMode: GameMode): Scene {
             }
           } else {
             // Classic pool: 5 power-up types
-            if (rand < 0.35) {
-              powerUpType = 'extraBomb'  // 35%
+            if (rand < 0.30) {
+              powerUpType = 'extraBomb'  // 30%
             } else if (rand < 0.65) {
-              powerUpType = 'largerBlast'  // 30%
+              powerUpType = 'largerBlast'  // 35%
             } else if (rand < 0.75) {
               powerUpType = 'kick'  // 10%
             } else if (rand < 0.85) {
